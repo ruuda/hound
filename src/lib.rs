@@ -24,7 +24,6 @@
 use std::fs;
 use std::io;
 use std::io::{Seek, Write};
-use std::marker;
 use std::path;
 
 trait WriteExt: io::Write {
@@ -52,33 +51,51 @@ impl<W> WriteExt for W where W: io::Write {
 }
 
 trait Sample {
-    fn write<W: io::Write>(self, writer: &mut W) -> io::Result<()>;
+    fn write<W: io::Write>(self, writer: &mut W, bits: u32) -> io::Result<()>;
 }
 
 impl Sample for u16 {
-    fn write<W: io::Write>(self, writer: &mut W) -> io::Result<()> {
+    fn write<W: io::Write>(self, writer: &mut W, bits: u32) -> io::Result<()> {
         writer.write_le_u16(self)
+        // TODO: take bits into account
     }
 }
 
+/// Specifies properties of the audio data.
 pub struct WavSpec {
-    n_channels: u16,
-    sample_rate: u16,
-    bits_per_sample: u16
+    /// The number of channels.
+    channels: u16,
+
+    /// The number of samples per second.
+    ///
+    /// A common value is 44100, this is 44.1 kHz which is used for CD audio.
+    sample_rate: u32,
+
+    /// The number of bits per sample.
+    ///
+    /// A common value is 16 bits per sample, which is used for CD audio.
+    bits_per_sample: u32
 }
 
-struct WavWriter<W, S> {
-    writer: W,
+struct WavWriter<W> where W: io::Write {
+    /// Specifies properties of the audio data.
+    spec: WavSpec,
+
+    /// Whether the header has been written already.
     wrote_header: bool,
-    phantom_sample: marker::PhantomData<fn(S)>
+
+    /// The writer that will be written to.
+    writer: io::BufWriter<W>,
+
+    /// The number of bytes written to the data section.
+    ///
+    /// This is an `u32` because WAVE cannot accomodate more data.
+    data_bytes_written: u32
 }
 
-impl<W, S> WavWriter<W, S>
-where W: io::Write + io::Seek,
-      S: Sample {
-
+impl<W> WavWriter<W> where W: io::Write + io::Seek {
     /// Creates a writer that writes the WAVE format to the underlying writer.
-    pub fn new(writer: W, spec: WavSpec) -> WavWriter<W, S> {
+    pub fn new(writer: W, spec: WavSpec) -> WavWriter<W> {
         unimplemented!();
     }
 
@@ -86,7 +103,7 @@ where W: io::Write + io::Seek,
     ///
     /// The file will be overwritten if it exists.
     pub fn create<P: AsRef<path::Path>>(filename: P, spec: WavSpec)
-           -> io::Result<WavWriter<fs::File, S>> {
+           -> io::Result<WavWriter<fs::File>> {
         let file = try!(fs::File::create(filename));
         Ok(WavWriter::new(file, spec))
     }
@@ -94,6 +111,7 @@ where W: io::Write + io::Seek,
     /// Writes the RIFF WAVE header
     fn write_header(&mut self) -> io::Result<()> {
         let mut header = [0u8; 44];
+        let spec = &self.spec;
 
         // Write the header in-memory first.
         {
@@ -107,11 +125,16 @@ where W: io::Write + io::Seek,
             try!(buffer.write_all("fmt\0".as_bytes()));
             try!(buffer.write_le_u32(16)); // Size of the WAVE header
             try!(buffer.write_le_u16(1));  // PCM encoded audio
-            try!(buffer.write_le_u16(2)); // TODO: num channels
-            try!(buffer.write_le_u32(44100)); // TODO: sample rate
-            try!(buffer.write_le_u32(0)); // TODO: sr * bps * n_chan / 8
+            try!(buffer.write_le_u16(spec.channels));
+            try!(buffer.write_le_u32(spec.sample_rate));
+            let bytes_per_sec = spec.sample_rate
+                              * spec.bits_per_sample
+                              * spec.channels as u32 / 8;
+            try!(buffer.write_le_u32(bytes_per_sec));
             try!(buffer.write_le_u16(16)); // TODO: block align
-            try!(buffer.write_le_u32(16)); // TODO: bits per sample
+            try!(buffer.write_le_u32(spec.bits_per_sample));
+
+            // TODO: data section header
         }
 
         // Then write the entire header at once.
@@ -120,8 +143,13 @@ where W: io::Write + io::Seek,
         Ok(())
     }
 
-    pub fn write_sample(sample: S) -> io::Result<()> {
-        // TODO
+    pub fn write_sample<S: Sample>(&mut self, sample: S) -> io::Result<()> {
+        if !self.wrote_header {
+            try!(self.write_header());
+        }
+
+        try!(sample.write(&mut self.writer, self.spec.bits_per_sample));
+        self.data_bytes_written += self.spec.bits_per_sample / 8;
         Ok(())
     }
 }
