@@ -15,7 +15,35 @@
 
 //! Hound, a WAV encoding library.
 //!
-//! TODO: Add some examples here.
+//! TODO: Add some introductory text here.
+//!
+//! The following example renders a 440 Hz sine wave, and stores it as as a
+//! mono wav file with a sample rate of 44.1 kHz and 16 bits per sample.
+//!
+//! ```
+//! #![feature(core)]
+//!
+//! use std::fs;
+//! use std::f32::consts::PI;
+//! use std::iter::IntoIterator;
+//! use std::num;
+//! use hound;
+//!
+//! let spec = hound::WavSpec {
+//!     channels: 1,
+//!     sample_rate: 44100,
+//!     bits_per_sample: 16
+//! };
+//! // TODO: ensure that the type can be inferred.
+//! let mut writer = hound::WavWriter::<fs::File>::create("sine.wav", spec);
+//! let mut writer = writer.ok().unwrap();
+//! for t in (0 .. 44100).into_iter().map(|x| x as f32 / 44100.0) {
+//!     let sample = (t * 440.0 * 2.0 * PI).sin();
+//!     let amplitude: i16 = num::Int::max_value();
+//!     writer.write_sample((sample * amplitude as f32) as i16).ok().unwrap();
+//! }
+//! writer.finalize().ok().unwrap();
+//! ```
 
 #![warn(missing_docs)]
 #![allow(dead_code)] // TODO: Remove for v0.1
@@ -50,7 +78,7 @@ impl<W> WriteExt for W where W: io::Write {
     }
 }
 
-trait Sample {
+pub trait Sample {
     fn write<W: io::Write>(self, writer: &mut W, bits: u32) -> io::Result<()>;
 }
 
@@ -61,35 +89,39 @@ impl Sample for u16 {
     }
 }
 
+impl Sample for i16 {
+    fn write<W: io::Write>(self, writer: &mut W, bits: u32) -> io::Result<()> {
+        writer.write_le_u16(self as u16)
+        // TODO: take bits into account
+    }
+}
+
 /// Specifies properties of the audio data.
+#[derive(Copy)]
 pub struct WavSpec {
     /// The number of channels.
-    channels: u16,
+    pub channels: u16,
 
     /// The number of samples per second.
     ///
     /// A common value is 44100, this is 44.1 kHz which is used for CD audio.
-    sample_rate: u32,
+    pub sample_rate: u32,
 
     /// The number of bits per sample.
     ///
     /// A common value is 16 bits per sample, which is used for CD audio.
-    bits_per_sample: u32
+    pub bits_per_sample: u32
 }
 
 /// A writer that accepts samples and writes the WAVE format.
 ///
 /// TODO: add example.
 ///
-/// The writer employs buffering internally to avoid too many `write` calls to
-/// the underlying writer. The underlying writer is assumed to be at offset 0
-/// upon creation.
-///
 /// After all samples have been written, the file must be finalized. This can
 /// be done by calling `finalize`. If `finalize` is not called, the file will
 /// be finalized upon drop. However, finalization involves IO that may fail,
 /// and without calling `finalize`, such a failure cannot be observed.
-struct WavWriter<W> where W: io::Write + io::Seek {
+pub struct WavWriter<W> where W: io::Write + io::Seek {
     /// Specifies properties of the audio data.
     spec: WavSpec,
 
@@ -110,8 +142,18 @@ struct WavWriter<W> where W: io::Write + io::Seek {
 
 impl<W> WavWriter<W> where W: io::Write + io::Seek {
     /// Creates a writer that writes the WAVE format to the underlying writer.
+    ///
+    /// The underlying writer is assumed to be at offset 0. `WavWriter` employs
+    /// buffering internally to avoid too many `write` calls to the underlying
+    /// writer.
     pub fn new(writer: W, spec: WavSpec) -> WavWriter<W> {
-        unimplemented!();
+        WavWriter {
+            spec: spec,
+            wrote_header: false,
+            writer: io::BufWriter::new(writer),
+            data_bytes_written: 0,
+            finalized: false
+        }
     }
 
     /// Creates a writer that writes the WAVE format to a file.

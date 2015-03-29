@@ -5,3 +5,6 @@
 # Editor files
 *.swp
 *.swo
+
+# Example output
+/sine.wav
