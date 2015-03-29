@@ -19,11 +19,13 @@
 
 #![warn(missing_docs)]
 #![allow(dead_code)] // TODO: Remove for v0.1
-#![feature(io)]
+#![feature(convert, io)]
 
+use std::fs;
 use std::io;
 use std::io::{Seek, Write};
 use std::marker;
+use std::path;
 
 trait WriteExt: io::Write {
     fn write_le_u16(&mut self, x: u16) -> io::Result<()>;
@@ -59,6 +61,12 @@ impl Sample for u16 {
     }
 }
 
+pub struct WavSpec {
+    n_channels: u16,
+    sample_rate: u16,
+    bits_per_sample: u16
+}
+
 struct WavWriter<W, S> {
     writer: W,
     wrote_header: bool,
@@ -69,23 +77,18 @@ impl<W, S> WavWriter<W, S>
 where W: io::Write + io::Seek,
       S: Sample {
 
-    pub fn with_bps(writer: W,
-                    n_channels: u16,
-                    sample_rate: u32,
-                    bits_per_sample: u32)
-                    -> WavWriter<W, S> {
+    /// Creates a writer that writes the WAVE format to the underlying writer.
+    pub fn new(writer: W, spec: WavSpec) -> WavWriter<W, S> {
         unimplemented!();
     }
 
-    pub fn new(writer: W,
-               n_channels: u16,
-               sample_rate: u32)
-               -> WavWriter<W, S> {
-        use std::mem::size_of;
-        WavWriter::with_bps(writer,
-                            n_channels,
-                            sample_rate,
-                            size_of::<S> as u32 * 8)
+    /// Creates a writer that writes the WAVE format to a file.
+    ///
+    /// The file will be overwritten if it exists.
+    pub fn create<P: AsRef<path::Path>>(filename: P, spec: WavSpec)
+           -> io::Result<WavWriter<fs::File, S>> {
+        let file = try!(fs::File::create(filename));
+        Ok(WavWriter::new(file, spec))
     }
 
     /// Writes the RIFF WAVE header
