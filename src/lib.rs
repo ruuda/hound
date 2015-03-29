@@ -19,7 +19,7 @@
 
 #![warn(missing_docs)]
 #![allow(dead_code)] // TODO: Remove for v0.1
-#![feature(convert, io)]
+#![feature(convert, io, unsafe_destructor)]
 
 use std::fs;
 use std::io;
@@ -77,7 +77,19 @@ pub struct WavSpec {
     bits_per_sample: u32
 }
 
-struct WavWriter<W> where W: io::Write {
+/// A writer that accepts samples and writes the WAVE format.
+///
+/// TODO: add example.
+///
+/// The writer employs buffering internally to avoid too many `write` calls to
+/// the underlying writer. The underlying writer is assumed to be at offset 0
+/// upon creation.
+///
+/// After all samples have been written, the file must be finalized. This can
+/// be done by calling `finalize`. If `finalize` is not called, the file will
+/// be finalized upon drop. However, finalization involves IO that may fail,
+/// and without calling `finalize`, such a failure cannot be observed.
+struct WavWriter<W> where W: io::Write + io::Seek {
     /// Specifies properties of the audio data.
     spec: WavSpec,
 
@@ -90,7 +102,10 @@ struct WavWriter<W> where W: io::Write {
     /// The number of bytes written to the data section.
     ///
     /// This is an `u32` because WAVE cannot accomodate more data.
-    data_bytes_written: u32
+    data_bytes_written: u32,
+
+    /// Whether `finalize_internal` has been called.
+    finalized: bool
 }
 
 impl<W> WavWriter<W> where W: io::Write + io::Seek {
@@ -119,7 +134,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
             try!(buffer.write_all("RIFF".as_bytes()));
 
             // Skip 4 bytes that will be filled with the file size afterwards.
-            buffer.seek(io::SeekFrom::Current(4));
+            try!(buffer.seek(io::SeekFrom::Current(4)));
 
             try!(buffer.write_all("WAVE".as_bytes()));
             try!(buffer.write_all("fmt\0".as_bytes()));
@@ -151,5 +166,37 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
         try!(sample.write(&mut self.writer, self.spec.bits_per_sample));
         self.data_bytes_written += self.spec.bits_per_sample / 8;
         Ok(())
+    }
+
+    fn finalize_internal(&mut self) -> io::Result<()> {
+        self.finalized = true;
+
+        // Flush remaining samples via the BufWriter.
+        try!(self.writer.flush());
+
+        // Extract the underlying writer and rewind it to the start, to update
+        // the header fields of which we now know the value.
+        let mut writer = self.writer.get_mut();
+        try!(writer.seek(io::SeekFrom::Start(0)));
+
+        // TODO: update size fields
+        Ok(())
+    }
+
+    pub fn finalize(mut self) -> io::Result<()> {
+        self.finalize_internal()
+    }
+}
+
+#[unsafe_destructor] // TODO: this can hopefully be removed at the next nightly!
+impl<W> Drop for WavWriter<W> where W: io::Write + io::Seek {
+    fn drop(&mut self) {
+        // `finalize_internal` must be called only once. If that is done via
+        // `finalize`, then this method is a no-op. If the user did not
+        // finalize explicitly, then we should do it now. This can fail, but
+        // drop should not panic, so a failure is ignored silently here.
+        if !self.finalized {
+            let _r = self.finalize_internal();
+        }
     }
 }
