@@ -54,8 +54,14 @@ use std::io;
 use std::io::{Seek, Write};
 use std::path;
 
+/// Extends the functionality of `io::Write` with additional methods.
+///
+/// The methods may be used on any type that implements `io::Write`.
 trait WriteExt: io::Write {
+    /// Writes an unsigned 16-bit integer in little endian format.
     fn write_le_u16(&mut self, x: u16) -> io::Result<()>;
+
+    /// Writes an unsigned 32-bit integer in little endian format.
     fn write_le_u32(&mut self, x: u32) -> io::Result<()>;
 }
 
@@ -78,7 +84,9 @@ impl<W> WriteExt for W where W: io::Write {
     }
 }
 
+/// A type that can be used to represent audio samples.
 pub trait Sample {
+    /// Writes the audio sample to the WAVE data section.
     fn write<W: io::Write>(self, writer: &mut W, bits: u32) -> io::Result<()>;
 }
 
@@ -200,6 +208,10 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
         Ok(())
     }
 
+    /// Writes a single sample for one channel.
+    ///
+    /// WAVE interleaves channel data, so the channel that this writes the
+    /// sample to depends on previous writes.
     pub fn write_sample<S: Sample>(&mut self, sample: S) -> io::Result<()> {
         if !self.wrote_header {
             try!(self.write_header());
@@ -210,6 +222,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
         Ok(())
     }
 
+    /// Performs finalization. After calling this, the writer should be destructed.
     fn finalize_internal(&mut self) -> io::Result<()> {
         self.finalized = true;
 
@@ -225,6 +238,11 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
         Ok(())
     }
 
+    /// Writes the parts of the WAVE format that require knowing all samples.
+    ///
+    /// This method must be called after all samples have been written. If it
+    /// is not called, the destructor will finalize the file, but any IO errors
+    /// that occur in the process cannot be observed in that manner.
     pub fn finalize(mut self) -> io::Result<()> {
         self.finalize_internal()
     }
