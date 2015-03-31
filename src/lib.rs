@@ -47,7 +47,7 @@
 
 #![warn(missing_docs)]
 #![allow(dead_code)] // TODO: Remove for v0.1
-#![feature(convert, io, unsafe_destructor)]
+#![feature(convert, io)]
 
 use std::fs;
 use std::io;
@@ -248,7 +248,6 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     }
 }
 
-#[unsafe_destructor] // TODO: this can hopefully be removed at the next nightly!
 impl<W> Drop for WavWriter<W> where W: io::Write + io::Seek {
     fn drop(&mut self) {
         // `finalize_internal` must be called only once. If that is done via
