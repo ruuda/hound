@@ -32,7 +32,7 @@
 //! let spec = hound::WavSpec {
 //!     channels: 1,
 //!     sample_rate: 44100,
-//!     bits_per_sample: hound::BitDepth::Bps16
+//!     bits_per_sample: 16
 //! };
 //! // TODO: ensure that the type can be inferred.
 //! let mut writer = hound::WavWriter::<fs::File>::create("sine.wav", spec);
@@ -47,12 +47,11 @@
 
 #![warn(missing_docs)]
 #![allow(dead_code)] // TODO: Remove for v0.1
-#![feature(convert, core, io)]
+#![feature(convert, io)]
 
 use std::fs;
 use std::io;
 use std::io::{Seek, Write};
-use std::num;
 use std::path;
 
 /// Extends the functionality of `io::Write` with additional methods.
@@ -105,61 +104,6 @@ impl Sample for i16 {
     }
 }
 
-/// The number of bits per sample, as a multiple of 8.
-#[derive(Clone, Copy)]
-pub enum BitDepth {
-    /// 8 bits per sample.
-    Bps8,
-
-    /// 16 bits per sample.
-    Bps16,
-
-    /// 24 bits per sample.
-    Bps24,
-
-    /// 32 bits per sample.
-    Bps32
-}
-
-impl BitDepth {
-    /// Returns the number of bits per sample as an integer.
-    pub fn into_u32(self) -> u32 {
-        match self {
-            BitDepth::Bps8 => 8,
-            BitDepth::Bps16 => 16,
-            BitDepth::Bps24 => 24,
-            BitDepth::Bps32 => 32
-        }
-    }
-}
-
-
-impl num::FromPrimitive for BitDepth {
-    fn from_u64(n: u64) -> Option<BitDepth> {
-        match n {
-            8 => Some(BitDepth::Bps8),
-            16 => Some(BitDepth::Bps16),
-            24 => Some(BitDepth::Bps24),
-            32 => Some(BitDepth::Bps32),
-            _ => None
-        }
-    }
-
-    fn from_i64(n: i64) -> Option<BitDepth> { num::from_u8(n as u8) }
-}
-
-impl num::ToPrimitive for BitDepth {
-    fn to_u64(&self) -> Option<u64> { Some(self.into_u32() as u64) }
-    fn to_i64(&self) -> Option<i64> { Some(self.into_u32() as i64) }
-}
-
-impl num::NumCast for BitDepth {
-    fn from<T>(n: T) -> Option<BitDepth> where T: num::ToPrimitive {
-        n.to_u8().and_then(num::FromPrimitive::from_u8)
-    }
-}
-
-
 /// Specifies properties of the audio data.
 #[derive(Clone, Copy)]
 pub struct WavSpec {
@@ -174,7 +118,7 @@ pub struct WavSpec {
     /// The number of bits per sample.
     ///
     /// A common value is 16 bits per sample, which is used for CD audio.
-    pub bits_per_sample: BitDepth
+    pub bits_per_sample: u32
 }
 
 /// A writer that accepts samples and writes the WAVE format.
@@ -188,6 +132,9 @@ pub struct WavSpec {
 pub struct WavWriter<W> where W: io::Write + io::Seek {
     /// Specifies properties of the audio data.
     spec: WavSpec,
+
+    /// The (container) bytes per sample. This is the bit rate / 8 rounded up.
+    bytes_per_sample: u32,
 
     /// Whether the header has been written already.
     wrote_header: bool,
@@ -213,6 +160,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     pub fn new(writer: W, spec: WavSpec) -> WavWriter<W> {
         WavWriter {
             spec: spec,
+            bytes_per_sample: (spec.bits_per_sample as f32 / 8.0).ceil() as u32,
             wrote_header: false,
             writer: io::BufWriter::new(writer),
             data_bytes_written: 0,
@@ -231,9 +179,12 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
 
     /// Writes the RIFF WAVE header
     fn write_header(&mut self) -> io::Result<()> {
-        let mut header = [0u8; 44];
+        // Useful links:
+        // https://msdn.microsoft.com/en-us/library/ms713462.aspx
+        // https://msdn.microsoft.com/en-us/library/ms713497.aspx
+
+        let mut header = [0u8; 70];
         let spec = &self.spec;
-        let bps = spec.bits_per_sample.into_u32();
 
         // Write the header in-memory first.
         {
@@ -241,22 +192,55 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
             try!(buffer.write_all("RIFF".as_bytes()));
 
             // Skip 4 bytes that will be filled with the file size afterwards.
-            try!(buffer.seek(io::SeekFrom::Current(4)));
+            try!(buffer.write_le_u32(0));
 
             try!(buffer.write_all("WAVE".as_bytes()));
-            try!(buffer.write_all("fmt\0".as_bytes()));
-            try!(buffer.write_le_u32(16)); // Size of the WAVE header
-            try!(buffer.write_le_u16(1));  // PCM encoded audio
+            try!(buffer.write_all("fmt ".as_bytes()));
+            try!(buffer.write_le_u32(16)); // Size of the WAVE header chunk.
+
+            // The following is based on the WAVEFORMATEXTENSIBLE struct as
+            // documented on MSDN.
+
+            // The field wFormatTag, value 1 means WAVE_FORMAT_PCM, but we use
+            // the slightly more sophisticated WAVE_FORMAT_EXTENSIBLE.
+            try!(buffer.write_le_u16(0xfffe));
+            // The field nChannels.
             try!(buffer.write_le_u16(spec.channels));
+            // The field nSamplesPerSec.
             try!(buffer.write_le_u32(spec.sample_rate));
             let bytes_per_sec = spec.sample_rate
-                              * bps
-                              * spec.channels as u32 / 8;
+                              * self.bytes_per_sample
+                              * spec.channels as u32;
+            // The field nAvgBytesPerSec;
             try!(buffer.write_le_u32(bytes_per_sec));
-            try!(buffer.write_le_u16(16)); // TODO: block align
-            try!(buffer.write_le_u32(bps));
+            // The field nBlockAlign. Block align * sample rate = bytes per sec.
+            try!(buffer.write_le_u16((bytes_per_sec / spec.sample_rate) as u16));
+            // The field wBitsPerSample. This is actually the size of the
+            // container, so this is a multiple of 8.
+            try!(buffer.write_le_u32(self.bytes_per_sample * 8));
+            // The field cbSize, the number of remaining bytes in the struct.
+            try!(buffer.write_le_u16(22));
+            // The field wValidBitsPerSample, the real number of bits per sample.
+            try!(buffer.write_le_u16(self.spec.bits_per_sample as u16));
+            // The field dwChannelMask.
+            // TODO: add the option to specify the channel mask. For now, write
+            // the stereo mask, even though it is wrong.
+            try!(buffer.write_le_u32(0x1 | 0x2));
+            // The field SubFormat. We use KSDATAFORMAT_SUBTYPE_PCM. The
+            // following UUIDS are defined:
+            // - PCM:        00000001-0000-0010-8000-00aa00389b71
+            // - IEEE_FLOAT: 00000003-0000-0010-8000-00aa00389b71
+            try!(buffer.write_all(&[0x00, 0x00, 0x00, 0x01,
+                                    0x00, 0x00, 0x00, 0x01,
+                                    0x80, 0x00, 0x00, 0xaa,
+                                    0x00, 0x38, 0x9b, 0x71]));
 
-            // TODO: data section header
+            // So far the "fmt " section, now comes the "data" section. We will
+            // only write the header here, actual data are the samples. The
+            // number of bytes that this will take is not known at this point.
+            // The 0 will be overwritten later.
+            try!(buffer.write_all("data".as_bytes()));
+            try!(buffer.write_le_u32(0));
         }
 
         // Then write the entire header at once.
@@ -274,9 +258,9 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
             try!(self.write_header());
         }
 
-        let bps = self.spec.bits_per_sample.into_u32();
-        try!(sample.write(&mut self.writer, bps));
-        self.data_bytes_written += bps / 8;
+        // TODO: do we need bits per sample? Is the padding at the obvious side?
+        try!(sample.write(&mut self.writer, self.bytes_per_sample));
+        self.data_bytes_written += self.bytes_per_sample;
         Ok(())
     }
 
