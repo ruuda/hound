@@ -32,7 +32,7 @@
 //! let spec = hound::WavSpec {
 //!     channels: 1,
 //!     sample_rate: 44100,
-//!     bits_per_sample: 16
+//!     bits_per_sample: hound::BitDepth::Bps16
 //! };
 //! // TODO: ensure that the type can be inferred.
 //! let mut writer = hound::WavWriter::<fs::File>::create("sine.wav", spec);
@@ -106,6 +106,7 @@ impl Sample for i16 {
 }
 
 /// The number of bits per sample, as a multiple of 8.
+#[derive(Clone, Copy)]
 pub enum BitDepth {
     /// 8 bits per sample.
     Bps8,
@@ -119,6 +120,19 @@ pub enum BitDepth {
     /// 32 bits per sample.
     Bps32
 }
+
+impl BitDepth {
+    /// Returns the number of bits per sample as an integer.
+    pub fn into_u32(self) -> u32 {
+        match self {
+            BitDepth::Bps8 => 8,
+            BitDepth::Bps16 => 16,
+            BitDepth::Bps24 => 24,
+            BitDepth::Bps32 => 32
+        }
+    }
+}
+
 
 impl num::FromPrimitive for BitDepth {
     fn from_u8(n: u8) -> Option<BitDepth> {
@@ -144,29 +158,28 @@ impl num::FromPrimitive for BitDepth {
 }
 
 impl num::ToPrimitive for BitDepth {
-    fn to_u8(&self) -> Option<u8> {
-        match *self {
-            BitDepth::Bps8 => Some(8),
-            BitDepth::Bps16 => Some(16),
-            BitDepth::Bps24 => Some(24),
-            BitDepth::Bps32 => Some(32)
-        }
-    }
-
-    fn to_u16(&self) -> Option<u16> { self.to_u8().map(|x| x as u16) }
-    fn to_u32(&self) -> Option<u32> { self.to_u8().map(|x| x as u32) }
-    fn to_u64(&self) -> Option<u64> { self.to_u8().map(|x| x as u64) }
-    fn to_i16(&self) -> Option<i16> { self.to_u8().map(|x| x as i16) }
-    fn to_i32(&self) -> Option<i32> { self.to_u8().map(|x| x as i32) }
-    fn to_i64(&self) -> Option<i64> { self.to_u8().map(|x| x as i64) }
-    fn to_f32(&self) -> Option<f32> { self.to_u8().map(|x| x as f32) }
-    fn to_f64(&self) -> Option<f64> { self.to_u8().map(|x| x as f64) }
-    fn to_usize(&self) -> Option<usize> { self.to_u8().map(|x| x as usize) }
-    fn to_isize(&self) -> Option<isize> { self.to_u8().map(|x| x as isize) }
+    fn to_u8(&self) -> Option<u8> { Some(self.into_u32() as u8) }
+    fn to_u16(&self) -> Option<u16> { Some(self.into_u32() as u16) }
+    fn to_u32(&self) -> Option<u32> { Some(self.into_u32() as u32) }
+    fn to_u64(&self) -> Option<u64> { Some(self.into_u32() as u64) }
+    fn to_i16(&self) -> Option<i16> { Some(self.into_u32() as i16) }
+    fn to_i32(&self) -> Option<i32> { Some(self.into_u32() as i32) }
+    fn to_i64(&self) -> Option<i64> { Some(self.into_u32() as i64) }
+    fn to_f32(&self) -> Option<f32> { Some(self.into_u32() as f32) }
+    fn to_f64(&self) -> Option<f64> { Some(self.into_u32() as f64) }
+    fn to_usize(&self) -> Option<usize> { Some(self.into_u32() as usize) }
+    fn to_isize(&self) -> Option<isize> { Some(self.into_u32() as isize) }
 }
 
+impl num::NumCast for BitDepth {
+    fn from<T>(n: T) -> Option<BitDepth> where T: num::ToPrimitive {
+        n.to_u8().and_then(num::FromPrimitive::from_u8)
+    }
+}
+
+
 /// Specifies properties of the audio data.
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 pub struct WavSpec {
     /// The number of channels.
     pub channels: u16,
@@ -179,7 +192,7 @@ pub struct WavSpec {
     /// The number of bits per sample.
     ///
     /// A common value is 16 bits per sample, which is used for CD audio.
-    pub bits_per_sample: u32
+    pub bits_per_sample: BitDepth
 }
 
 /// A writer that accepts samples and writes the WAVE format.
@@ -238,6 +251,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     fn write_header(&mut self) -> io::Result<()> {
         let mut header = [0u8; 44];
         let spec = &self.spec;
+        let bps = spec.bits_per_sample.into_u32();
 
         // Write the header in-memory first.
         {
@@ -254,11 +268,11 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
             try!(buffer.write_le_u16(spec.channels));
             try!(buffer.write_le_u32(spec.sample_rate));
             let bytes_per_sec = spec.sample_rate
-                              * spec.bits_per_sample
+                              * bps
                               * spec.channels as u32 / 8;
             try!(buffer.write_le_u32(bytes_per_sec));
             try!(buffer.write_le_u16(16)); // TODO: block align
-            try!(buffer.write_le_u32(spec.bits_per_sample));
+            try!(buffer.write_le_u32(bps));
 
             // TODO: data section header
         }
@@ -278,8 +292,9 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
             try!(self.write_header());
         }
 
-        try!(sample.write(&mut self.writer, self.spec.bits_per_sample));
-        self.data_bytes_written += self.spec.bits_per_sample / 8;
+        let bps = self.spec.bits_per_sample.into_u32();
+        try!(sample.write(&mut self.writer, bps));
+        self.data_bytes_written += bps / 8;
         Ok(())
     }
 
