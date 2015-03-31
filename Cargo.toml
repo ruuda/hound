@@ -1,10 +1,10 @@
 [package]
 
 name = "hound"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Ruud van Asseldonk <dev@veniogames.com>"]
 description = "A WAV encoding library"
-keywords = ["wav", "audio", "codec"]
+keywords = ["wav", "wave", "audio", "codec"]
 license = "GPL-3.0"
 readme = "readme.md"
 homepage = "https://github.com/ruud-v-a/hound"
