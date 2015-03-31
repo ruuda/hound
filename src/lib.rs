@@ -196,7 +196,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
 
             try!(buffer.write_all("WAVE".as_bytes()));
             try!(buffer.write_all("fmt ".as_bytes()));
-            try!(buffer.write_le_u32(16)); // Size of the WAVE header chunk.
+            try!(buffer.write_le_u32(42)); // Size of the WAVE header chunk.
 
             // The following is based on the WAVEFORMATEXTENSIBLE struct as
             // documented on MSDN.
@@ -217,7 +217,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
             try!(buffer.write_le_u16((bytes_per_sec / spec.sample_rate) as u16));
             // The field wBitsPerSample. This is actually the size of the
             // container, so this is a multiple of 8.
-            try!(buffer.write_le_u32(self.bytes_per_sample * 8));
+            try!(buffer.write_le_u16(self.bytes_per_sample as u16 * 8));
             // The field cbSize, the number of remaining bytes in the struct.
             try!(buffer.write_le_u16(22));
             // The field wValidBitsPerSample, the real number of bits per sample.
@@ -227,11 +227,15 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
             // the stereo mask, even though it is wrong.
             try!(buffer.write_le_u32(0x1 | 0x2));
             // The field SubFormat. We use KSDATAFORMAT_SUBTYPE_PCM. The
-            // following UUIDS are defined:
+            // following GUIDS are defined:
             // - PCM:        00000001-0000-0010-8000-00aa00389b71
             // - IEEE_FLOAT: 00000003-0000-0010-8000-00aa00389b71
-            try!(buffer.write_all(&[0x00, 0x00, 0x00, 0x01,
-                                    0x00, 0x00, 0x00, 0x01,
+            // The byte order of a GUID is native for the first three sections,
+            // which is assumed to be little endian, and big endian for the
+            // last 8-byte section (which does contain a hyphen, for reasons
+            // unknown to me).
+            try!(buffer.write_all(&[0x01, 0x00, 0x00, 0x00,
+                                    0x00, 0x00, 0x10, 0x00,
                                     0x80, 0x00, 0x00, 0xaa,
                                     0x00, 0x38, 0x9b, 0x71]));
 
@@ -256,6 +260,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     pub fn write_sample<S: Sample>(&mut self, sample: S) -> io::Result<()> {
         if !self.wrote_header {
             try!(self.write_header());
+            self.wrote_header = true;
         }
 
         // TODO: do we need bits per sample? Is the padding at the obvious side?
