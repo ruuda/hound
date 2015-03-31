@@ -183,7 +183,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
         // https://msdn.microsoft.com/en-us/library/ms713462.aspx
         // https://msdn.microsoft.com/en-us/library/ms713497.aspx
 
-        let mut header = [0u8; 70];
+        let mut header = [0u8; 68];
         let spec = &self.spec;
 
         // Write the header in-memory first.
@@ -196,7 +196,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
 
             try!(buffer.write_all("WAVE".as_bytes()));
             try!(buffer.write_all("fmt ".as_bytes()));
-            try!(buffer.write_le_u32(42)); // Size of the WAVE header chunk.
+            try!(buffer.write_le_u32(40)); // Size of the WAVE header chunk.
 
             // The following is based on the WAVEFORMATEXTENSIBLE struct as
             // documented on MSDN.
@@ -279,9 +279,14 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
         // Extract the underlying writer and rewind it to the start, to update
         // the header fields of which we now know the value.
         let mut writer = self.writer.get_mut();
-        try!(writer.seek(io::SeekFrom::Start(0)));
 
-        // TODO: update size fields
+        // The header minus magic and 32-bit filesize is 60 bytes long.
+        let file_size = self.data_bytes_written + 60;
+        try!(writer.seek(io::SeekFrom::Start(4)));
+        try!(writer.write_le_u32(file_size));
+        try!(writer.seek(io::SeekFrom::Start(64)));
+        try!(writer.write_le_u32(self.data_bytes_written));
+
         Ok(())
     }
 
