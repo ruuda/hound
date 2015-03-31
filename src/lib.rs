@@ -35,8 +35,8 @@
 //!     bits_per_sample: 16
 //! };
 //! // TODO: ensure that the type can be inferred.
-//! let mut writer = hound::WavWriter::<fs::File>::create("sine.wav", spec);
-//! let mut writer = writer.ok().unwrap();
+//! let writer_res = hound::WavWriter::<fs::File>::create("sine.wav", spec);
+//! let mut writer = writer_res.ok().unwrap();
 //! for t in (0 .. 44100).into_iter().map(|x| x as f32 / 44100.0) {
 //!     let sample = (t * 440.0 * 2.0 * PI).sin();
 //!     let amplitude: i16 = num::Int::max_value();
@@ -102,6 +102,21 @@ impl Sample for i16 {
         writer.write_le_u16(self as u16)
         // TODO: take bits into account
     }
+}
+
+/// Generates a bitmask with `channels` ones in the least significant bits.
+fn channel_mask(channels: u16) -> u32 {
+    (0 .. channels).map(|c| 1 << c).fold(0, |a, c| a | c)
+}
+
+#[test]
+fn verify_channel_mask()
+{
+    assert_eq!(channel_mask(0), 0);
+    assert_eq!(channel_mask(1), 1);
+    assert_eq!(channel_mask(2), 3);
+    assert_eq!(channel_mask(3), 7);
+    assert_eq!(channel_mask(4), 15);
 }
 
 /// Specifies properties of the audio data.
@@ -223,9 +238,9 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
             // The field wValidBitsPerSample, the real number of bits per sample.
             try!(buffer.write_le_u16(self.spec.bits_per_sample as u16));
             // The field dwChannelMask.
-            // TODO: add the option to specify the channel mask. For now, write
-            // the stereo mask, even though it is wrong.
-            try!(buffer.write_le_u32(0x1 | 0x2));
+            // TODO: add the option to specify the channel mask. For now, use
+            // the default assignment.
+            try!(buffer.write_le_u32(channel_mask(self.spec.channels)));
             // The field SubFormat. We use KSDATAFORMAT_SUBTYPE_PCM. The
             // following GUIDS are defined:
             // - PCM:        00000001-0000-0010-8000-00aa00389b71
