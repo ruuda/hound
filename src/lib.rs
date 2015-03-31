@@ -135,7 +135,7 @@ impl BitDepth {
 
 
 impl num::FromPrimitive for BitDepth {
-    fn from_u8(n: u8) -> Option<BitDepth> {
+    fn from_u64(n: u64) -> Option<BitDepth> {
         match n {
             8 => Some(BitDepth::Bps8),
             16 => Some(BitDepth::Bps16),
@@ -145,30 +145,12 @@ impl num::FromPrimitive for BitDepth {
         }
     }
 
-    fn from_u16(n: u16) -> Option<BitDepth> { num::from_u8(n as u8) }
-    fn from_u32(n: u32) -> Option<BitDepth> { num::from_u8(n as u8) }
-    fn from_u64(n: u64) -> Option<BitDepth> { num::from_u8(n as u8) }
-    fn from_i16(n: i16) -> Option<BitDepth> { num::from_u8(n as u8) }
-    fn from_i32(n: i32) -> Option<BitDepth> { num::from_u8(n as u8) }
     fn from_i64(n: i64) -> Option<BitDepth> { num::from_u8(n as u8) }
-    fn from_f32(n: f32) -> Option<BitDepth> { num::from_u8(n as u8) }
-    fn from_f64(n: f64) -> Option<BitDepth> { num::from_u8(n as u8) }
-    fn from_usize(n: usize) -> Option<BitDepth> { num::from_u8(n as u8) }
-    fn from_isize(n: isize) -> Option<BitDepth> { num::from_u8(n as u8) }
 }
 
 impl num::ToPrimitive for BitDepth {
-    fn to_u8(&self) -> Option<u8> { Some(self.into_u32() as u8) }
-    fn to_u16(&self) -> Option<u16> { Some(self.into_u32() as u16) }
-    fn to_u32(&self) -> Option<u32> { Some(self.into_u32() as u32) }
     fn to_u64(&self) -> Option<u64> { Some(self.into_u32() as u64) }
-    fn to_i16(&self) -> Option<i16> { Some(self.into_u32() as i16) }
-    fn to_i32(&self) -> Option<i32> { Some(self.into_u32() as i32) }
     fn to_i64(&self) -> Option<i64> { Some(self.into_u32() as i64) }
-    fn to_f32(&self) -> Option<f32> { Some(self.into_u32() as f32) }
-    fn to_f64(&self) -> Option<f64> { Some(self.into_u32() as f64) }
-    fn to_usize(&self) -> Option<usize> { Some(self.into_u32() as usize) }
-    fn to_isize(&self) -> Option<isize> { Some(self.into_u32() as isize) }
 }
 
 impl num::NumCast for BitDepth {
