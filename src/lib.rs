@@ -47,11 +47,12 @@
 
 #![warn(missing_docs)]
 #![allow(dead_code)] // TODO: Remove for v0.1
-#![feature(convert, io)]
+#![feature(convert, core, io)]
 
 use std::fs;
 use std::io;
 use std::io::{Seek, Write};
+use std::num;
 use std::path;
 
 /// Extends the functionality of `io::Write` with additional methods.
@@ -102,6 +103,66 @@ impl Sample for i16 {
         writer.write_le_u16(self as u16)
         // TODO: take bits into account
     }
+}
+
+/// The number of bits per sample, as a multiple of 8.
+pub enum BitDepth {
+    /// 8 bits per sample.
+    Bps8,
+
+    /// 16 bits per sample.
+    Bps16,
+
+    /// 24 bits per sample.
+    Bps24,
+
+    /// 32 bits per sample.
+    Bps32
+}
+
+impl num::FromPrimitive for BitDepth {
+    fn from_u8(n: u8) -> Option<BitDepth> {
+        match n {
+            8 => Some(BitDepth::Bps8),
+            16 => Some(BitDepth::Bps16),
+            24 => Some(BitDepth::Bps24),
+            32 => Some(BitDepth::Bps32),
+            _ => None
+        }
+    }
+
+    fn from_u16(n: u16) -> Option<BitDepth> { num::from_u8(n as u8) }
+    fn from_u32(n: u32) -> Option<BitDepth> { num::from_u8(n as u8) }
+    fn from_u64(n: u64) -> Option<BitDepth> { num::from_u8(n as u8) }
+    fn from_i16(n: i16) -> Option<BitDepth> { num::from_u8(n as u8) }
+    fn from_i32(n: i32) -> Option<BitDepth> { num::from_u8(n as u8) }
+    fn from_i64(n: i64) -> Option<BitDepth> { num::from_u8(n as u8) }
+    fn from_f32(n: f32) -> Option<BitDepth> { num::from_u8(n as u8) }
+    fn from_f64(n: f64) -> Option<BitDepth> { num::from_u8(n as u8) }
+    fn from_usize(n: usize) -> Option<BitDepth> { num::from_u8(n as u8) }
+    fn from_isize(n: isize) -> Option<BitDepth> { num::from_u8(n as u8) }
+}
+
+impl num::ToPrimitive for BitDepth {
+    fn to_u8(&self) -> Option<u8> {
+        match *self {
+            BitDepth::Bps8 => Some(8),
+            BitDepth::Bps16 => Some(16),
+            BitDepth::Bps24 => Some(24),
+            BitDepth::Bps32 => Some(32)
+        }
+    }
+
+    fn to_u16(&self) -> Option<u16> { self.to_u8().map(|x| x as u16) }
+    fn to_u32(&self) -> Option<u32> { self.to_u8().map(|x| x as u32) }
+    fn to_u64(&self) -> Option<u64> { self.to_u8().map(|x| x as u64) }
+    fn to_i16(&self) -> Option<i16> { self.to_u8().map(|x| x as i16) }
+    fn to_i32(&self) -> Option<i32> { self.to_u8().map(|x| x as i32) }
+    fn to_i64(&self) -> Option<i64> { self.to_u8().map(|x| x as i64) }
+    fn to_f32(&self) -> Option<f32> { self.to_u8().map(|x| x as f32) }
+    fn to_f64(&self) -> Option<f64> { self.to_u8().map(|x| x as f64) }
+    fn to_usize(&self) -> Option<usize> { self.to_u8().map(|x| x as usize) }
+    fn to_isize(&self) -> Option<isize> { self.to_u8().map(|x| x as isize) }
 }
 
 /// Specifies properties of the audio data.
