@@ -37,7 +37,7 @@
 //! // TODO: ensure that the type can be inferred.
 //! let writer_res = hound::WavWriter::<fs::File>::create("sine.wav", spec);
 //! let mut writer = writer_res.ok().unwrap();
-//! for t in (0 .. 44100).into_iter().map(|x| x as f32 / 44100.0) {
+//! for t in (0 .. 44100).map(|x| x as f32 / 44100.0) {
 //!     let sample = (t * 440.0 * 2.0 * PI).sin();
 //!     let amplitude: i16 = num::Int::max_value();
 //!     writer.write_sample((sample * amplitude as f32) as i16).ok().unwrap();
@@ -326,3 +326,5 @@ impl<W> Drop for WavWriter<W> where W: io::Write + io::Seek {
         }
     }
 }
+
+// TODO: Add benchmark for write speed.
