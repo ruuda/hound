@@ -46,8 +46,6 @@
 //! ```
 
 #![warn(missing_docs)]
-#![allow(dead_code)] // TODO: Remove for v0.1
-#![feature(convert, io)]
 
 use std::fs;
 use std::io;
