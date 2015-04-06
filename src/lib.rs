@@ -21,12 +21,9 @@
 //! mono wav file with a sample rate of 44.1 kHz and 16 bits per sample.
 //!
 //! ```
-//! #![feature(core)]
-//!
 //! use std::fs;
 //! use std::f32::consts::PI;
-//! use std::iter::IntoIterator;
-//! use std::num;
+//! use std::i16;
 //! use hound;
 //!
 //! let spec = hound::WavSpec {
@@ -39,7 +36,7 @@
 //! let mut writer = writer_res.ok().unwrap();
 //! for t in (0 .. 44100).map(|x| x as f32 / 44100.0) {
 //!     let sample = (t * 440.0 * 2.0 * PI).sin();
-//!     let amplitude: i16 = num::Int::max_value();
+//!     let amplitude: i16 = i16::MAX;
 //!     writer.write_sample((sample * amplitude as f32) as i16).ok().unwrap();
 //! }
 //! writer.finalize().ok().unwrap();
