@@ -80,6 +80,69 @@ impl<W> WriteExt for W where W: io::Write {
     }
 }
 
+// TODO: Can this be unified among Hound and Claxon? Copy + Paste is bad, but
+// I refuse to use an external crate just to read into an array of bytes, or
+// to read an integer. Such functionality should really be in the standard
+// library. Practically _every_ program that does IO will need more high-level
+// functionality than what the standard library currently provides.
+/// Extends the functionality of `io::Read` with additional methods.
+///
+/// The methods may be used on any type that implements `io::Read`.
+trait ReadExt: io::Read {
+    /// Reads as many bytes as `buf` is long.
+    ///
+    /// This may issue multiple `read` calls internally. An error is returned
+    /// if `read` read 0 bytes before the buffer is full.
+    fn read_into(&mut self, buf: &mut [u8]) -> io::Result<()>;
+
+    /// Reads `n` bytes and returns them in a vector.
+    fn read_bytes(&mut self, n: usize) -> io::Result<Vec<u8>>;
+
+    /// Reads two bytes and interprets them as a little-endian 16-bit unsigned integer.
+    fn read_le_u16(&mut self) -> io::Result<u16>;
+
+    /// Reads four bytes and interprets them as a little-endian 32-bit unsigned integer.
+    fn read_le_u32(&mut self) -> io::Result<u32>;
+}
+
+impl<R> ReadExt for R where R: io::Read {
+    fn read_into(&mut self, buf: &mut [u8]) -> io::Result<()> {
+        let mut n = 0;
+        while n < buf.len() {
+            let progress = try!(self.read(&mut buf[n ..]));
+            if progress > 0 {
+                n += progress;
+            } else {
+                return Err(io::Error::new(io::ErrorKind::Other,
+                                          "Failed to read enough bytes."));
+            }
+        }
+        Ok(())
+    }
+
+    fn read_bytes(&mut self, n: usize) -> io::Result<Vec<u8>> {
+        let mut buf = Vec::with_capacity(n);
+        // TODO: is there a safe alternative that is not crazy like draining
+        // a repeat(0u8) iterator?
+        unsafe { buf.set_len(n); }
+        try!(self.read_into(&mut buf[..]));
+        Ok(buf)
+    }
+
+    fn read_le_u16(&mut self) -> io::Result<u16> {
+        let mut buf = [0u8; 2];
+        try!(self.read_into(&mut buf));
+        Ok((buf[1] as u16) << 8 | (buf[0] as u16))
+    }
+
+    fn read_le_u32(&mut self) -> io::Result<u32> {
+        let mut buf = [0u8; 4];
+        try!(self.read_into(&mut buf));
+        Ok((buf[3] as u32) << 24 | (buf[2] as u32) << 16 |
+           (buf[1] as u32) << 8  | (buf[0] as u32) << 0)
+    }
+}
+
 /// A type that can be used to represent audio samples.
 pub trait Sample {
     /// Writes the audio sample to the WAVE data section.
@@ -337,18 +400,57 @@ pub struct WavSamples<'wr, R, S> where R: 'wr {
 }
 
 impl<R> WavReader<R> where R: io::Read {
+
+    // TODO: define a custom error type to report ill-formed files.
+    fn read_header(reader: &mut R) -> io::Result<WavSpec> {
+        // Every WAVE file starts with the four bytes 'RIFF' and a file length.
+        // TODO: the old approach of having a slice on the stack and reading
+        // into it is more cumbersome, but also avoids a heap allocation. Is
+        // the compiler smart enough to avoid the heap allocation anyway? I
+        // would not expect it to be.
+        if "RIFF".as_bytes() != &try!(reader.read_bytes(4))[..] {
+            // TODO: use custom error type
+            return Err(io::Error::new(io::ErrorKind::Other, "No RIFF tag found."));
+        }
+
+        // TODO: would this be useful anywhere? Probably not, except for
+        // validating files, but do we need to be so strict?
+        let _file_sz = try!(reader.read_le_u32());
+
+        // Next is whe WAVE header.
+        if "WAVE".as_bytes() != &try!(reader.read_bytes(4))[..] {
+            // TODO: use custom error type
+            return Err(io::Error::new(io::ErrorKind::Other, "No WAVE tag found."));
+        }
+
+        // Then a "fmt " block should follow.
+        // TODO: is the "fmt " block always the first block? Should this be
+        // flexible? It should anyway, so this hardly matters. For now, we
+        // expect only an "fmt " block first, and then a "data" block.
+        if "fmt ".as_bytes() != &try!(reader.read_bytes(4))[..] {
+            // TODO: use custom error type
+            return Err(io::Error::new(io::ErrorKind::Other, "No fmt block found."));
+        }
+
+        // TODO: read the actual fmt block.
+        let spec = WavSpec {
+            channels: 2,
+            sample_rate: 44100,
+            bits_per_sample: 16
+        };
+
+        Ok(spec)
+    }
+
     // TODO: define a custom error type to report ill-formed files.
     /// Attempts to create a reader that reads the WAVE format.
     ///
     /// The header is read immediately. Reading the data will be done on
     /// demand.
-    pub fn new(reader: R) -> io::Result<WavReader<R>> {
-        // TODO: try and read header, find spec.
-        let spec = WavSpec {
-            channels: 1,
-            sample_rate: 44100,
-            bits_per_sample: 16
-        };
+    pub fn new(mut reader: R) -> io::Result<WavReader<R>> {
+        let spec = try!(WavReader::read_header(&mut reader));
+
+        // TODO: advance reader to data section, read its length.
         let wav_reader = WavReader {
             spec: spec,
             reader: reader
