@@ -46,7 +46,7 @@
 
 use std::fs;
 use std::io;
-use std::io::{Seek, Write};
+use std::io::Write;
 use std::path;
 
 /// Extends the functionality of `io::Write` with additional methods.
