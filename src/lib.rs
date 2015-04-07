@@ -47,6 +47,7 @@
 use std::fs;
 use std::io;
 use std::io::Write;
+use std::marker;
 use std::path;
 
 /// Extends the functionality of `io::Write` with additional methods.
@@ -323,3 +324,52 @@ impl<W> Drop for WavWriter<W> where W: io::Write + io::Seek {
 }
 
 // TODO: Add benchmark for write speed.
+
+/// A reader that reads the WAVE format from the underlying reader.
+pub struct WavReader<R> {
+    spec: WavSpec,
+    reader: R
+}
+
+pub struct WavSamples<'wr, R, S> where R: 'wr {
+    reader: &'wr mut WavReader<R>,
+    phantom_sample: marker::PhantomData<S>
+}
+
+impl<R> WavReader<R> where R: io::Read {
+    // TODO: define a custom error type to report ill-formed files.
+    /// Attempts to create a reader that reads the WAVE format.
+    ///
+    /// The header is read immediately. Reading the data will be done on
+    /// demand.
+    pub fn new(reader: R) -> io::Result<WavReader<R>> {
+        // TODO: try and read header, find spec.
+        let spec = WavSpec {
+            channels: 1,
+            sample_rate: 44100,
+            bits_per_sample: 16
+        };
+        let wav_reader = WavReader {
+            spec: spec,
+            reader: reader
+        };
+
+        Ok(wav_reader)
+    }
+
+    // TODO: Should this return by value instead? A reference is more consistent
+    // with Claxon, but the type is only 80 bytes, barely larger than a pointer.
+    // Is it worth the extra indirection? On the other hand, the indirection
+    // is probably optimised away.
+    /// Returns information about the WAVE file.
+    pub fn spec(&self) -> &WavSpec {
+        &self.spec
+    }
+
+    pub fn samples<'wr, S: Sample>(&'wr mut self) -> WavSamples<'wr, R, S> {
+        WavSamples {
+            reader: self,
+            phantom_sample: marker::PhantomData
+        }
+    }
+}
