@@ -3,3 +3,7 @@ language: rust
 notifications:
   email:
     on_success: never
+
+rust:
+  - 1.0.0-beta
+  - nightly
