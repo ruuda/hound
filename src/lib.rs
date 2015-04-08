@@ -390,7 +390,17 @@ impl<W> Drop for WavWriter<W> where W: io::Write + io::Seek {
 
 /// A reader that reads the WAVE format from the underlying reader.
 pub struct WavReader<R> {
+    /// Specification of the file as found in the fmt chunk.
     spec: WavSpec,
+
+    /// The number of samples in the data chunk.
+    ///
+    /// The data chunk is limited to a 4 GiB length because its header has a
+    /// 32-bit length field. A sample takes at least one byte to store, so the
+    /// number of samples is always less than 2^32.
+    num_samples: u32,
+
+    /// The reader from which the WAVE format is read.
     reader: R
 }
 
@@ -402,8 +412,8 @@ pub struct WavSamples<'wr, R, S> where R: 'wr {
 
 impl<R> WavReader<R> where R: io::Read {
 
-    // TODO: define a custom error type to report ill-formed files.
-    fn read_header(reader: &mut R) -> io::Result<WavSpec> {
+    /// Reads the RIFF WAVE header, returns the supposed file size.
+    fn read_wave_header(reader: &mut R) -> io::Result<u32> {
         // Every WAVE file starts with the four bytes 'RIFF' and a file length.
         // TODO: the old approach of having a slice on the stack and reading
         // into it is more cumbersome, but also avoids a heap allocation. Is
@@ -416,14 +426,20 @@ impl<R> WavReader<R> where R: io::Read {
 
         // TODO: would this be useful anywhere? Probably not, except for
         // validating files, but do we need to be so strict?
-        let _file_sz = try!(reader.read_le_u32());
+        let file_len = try!(reader.read_le_u32());
 
-        // Next is whe WAVE header.
+        // Next four bytes indicate the file type, which should be WAVE.
         if "WAVE".as_bytes() != &try!(reader.read_bytes(4))[..] {
             // TODO: use custom error type
             return Err(io::Error::new(io::ErrorKind::Other, "No WAVE tag found."));
         }
 
+        Ok(file_len)
+    }
+
+    // TODO: define a custom error type to report ill-formed files.
+    /// Reads the fmt chunk of the file, returns the information it provides.
+    fn read_fmt_chunk(reader: &mut R) -> io::Result<WavSpec> {
         // Then a "fmt " chunk should follow.
         // TODO: is the "fmt " block always the first block? Should this be
         // flexible? It should anyway, so this hardly matters. For now, we
@@ -510,17 +526,29 @@ impl<R> WavReader<R> where R: io::Read {
         Ok(spec)
     }
 
+    /// Reads the header of the data chunk and returns its length.
+    fn read_data_chunk(reader: &mut R) -> io::Result<u32> {
+        if "data".as_bytes() != &try!(reader.read_bytes(4))[..] {
+            // TODO: use custom error type
+            return Err(io::Error::new(io::ErrorKind::Other, "No data block found."));
+        }
+        let data_chunk_len = try!(reader.read_le_u32());
+        Ok(data_chunk_len)
+    }
+
     // TODO: define a custom error type to report ill-formed files.
     /// Attempts to create a reader that reads the WAVE format.
     ///
     /// The header is read immediately. Reading the data will be done on
     /// demand.
     pub fn new(mut reader: R) -> io::Result<WavReader<R>> {
-        let spec = try!(WavReader::read_header(&mut reader));
+        try!(WavReader::read_wave_header(&mut reader));
+        let spec = try!(WavReader::read_fmt_chunk(&mut reader));
+        let data_len = try!(WavReader::read_data_chunk(&mut reader));
 
-        // TODO: advance reader to data section, read its length.
         let wav_reader = WavReader {
             spec: spec,
+            num_samples: data_len / (spec.bits_per_sample / 8),
             reader: reader
         };
 
@@ -556,6 +584,9 @@ fn read_wav_waveformat() {
     assert_eq!(wav_reader.spec().channels, 2);
     assert_eq!(wav_reader.spec().sample_rate, 44100);
     assert_eq!(wav_reader.spec().bits_per_sample, 16);
+
+    // TODO: implement Iterator for samples.
+    // let samples: Vec<i16> = wav_reader.samples().collect();
 }
 
 #[test]
