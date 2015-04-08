@@ -586,6 +586,12 @@ impl<R> WavReader<R> where R: io::Read {
         &self.spec
     }
 
+    /// Returns an iterator over all samples.
+    // TODO: how do we handle channels? Add an iterator that yields &[S]?
+    // This is not even possible nicely if the number of channels is not known
+    // in advance. It is not such a problem to have interleaved audio though,
+    // if the user knows. Methods could be provided for stereo iterators, in
+    // case the number of channels is known in advance?
     pub fn samples<'wr, S: Sample>(&'wr mut self) -> WavSamples<'wr, R, S> {
         WavSamples {
             reader: self,
