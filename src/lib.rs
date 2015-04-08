@@ -570,7 +570,7 @@ impl<R> WavReader<R> where R: io::Read {
         let wav_reader = WavReader {
             spec: spec,
             num_samples: num_samples,
-            samples_read: num_samples,
+            samples_read: 0,
             reader: reader
         };
 
