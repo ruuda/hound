@@ -104,6 +104,9 @@ trait ReadExt: io::Read {
     /// Reads `n` bytes and returns them in a vector.
     fn read_bytes(&mut self, n: usize) -> io::Result<Vec<u8>>;
 
+    /// Reads two bytes and interprets them as a little-endian 16-bit signed integer.
+    fn read_le_i16(&mut self) -> io::Result<i16>;
+
     /// Reads two bytes and interprets them as a little-endian 16-bit unsigned integer.
     fn read_le_u16(&mut self) -> io::Result<u16>;
 
@@ -133,6 +136,10 @@ impl<R> ReadExt for R where R: io::Read {
         unsafe { buf.set_len(n); }
         try!(self.read_into(&mut buf[..]));
         Ok(buf)
+    }
+
+    fn read_le_i16(&mut self) -> io::Result<i16> {
+        self.read_le_u16().map(|x| x as i16)
     }
 
     fn read_le_u16(&mut self) -> io::Result<u16> {
