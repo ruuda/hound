@@ -1,4 +1,4 @@
-// Hound -- A WAV encoding library in Rust
+// Hound -- A WAV encoding and decoding library in Rust
 // Copyright (C) 2015 Ruud van Asseldonk
 //
 // This program is free software: you can redistribute it and/or modify
