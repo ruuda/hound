@@ -394,6 +394,7 @@ pub struct WavReader<R> {
     reader: R
 }
 
+/// An iterator that yields samples of type `S` read from a `WavReader`.
 pub struct WavSamples<'wr, R, S> where R: 'wr {
     reader: &'wr mut WavReader<R>,
     phantom_sample: marker::PhantomData<S>
@@ -423,7 +424,7 @@ impl<R> WavReader<R> where R: io::Read {
             return Err(io::Error::new(io::ErrorKind::Other, "No WAVE tag found."));
         }
 
-        // Then a "fmt " block should follow.
+        // Then a "fmt " chunk should follow.
         // TODO: is the "fmt " block always the first block? Should this be
         // flexible? It should anyway, so this hardly matters. For now, we
         // expect only an "fmt " block first, and then a "data" block.
@@ -431,12 +432,79 @@ impl<R> WavReader<R> where R: io::Read {
             // TODO: use custom error type
             return Err(io::Error::new(io::ErrorKind::Other, "No fmt block found."));
         }
+        let fmt_chunk_len = try!(reader.read_le_u32());
 
-        // TODO: read the actual fmt block.
+        // A minimum chunk length of at least 16 is assumed. Note: actually,
+        // the first 14 bytes contain enough information to0 fully specify the
+        // file. I have not encountered a file with a 14-byte fmt section
+        // though. If you ever encounter such file, please contact me.
+        if fmt_chunk_len < 16 {
+            // TODO: use custom error type
+            return Err(io::Error::new(io::ErrorKind::Other, "Invalid fmt chunck size."));
+        }
+
+        // Read the WAVEFORMAT struct, as defined at
+        // https://msdn.microsoft.com/en-us/library/ms713498.aspx.
+        // ```
+        // typedef struct {
+        //     WORD  wFormatTag;
+        //     WORD  nChannels;
+        //     DWORD nSamplesPerSec;
+        //     DWORD nAvgBytesPerSec;
+        //     WORD  nBlockAlign;
+        // } WAVEFORMAT;
+        // ```
+        // The WAVEFORMATEX struct has two more members, as defined at
+        // https://msdn.microsoft.com/en-us/library/ms713497.aspx
+        // ```
+        // typedef struct {
+        //     WORD  wFormatTag;
+        //     WORD  nChannels;
+        //     DWORD nSamplesPerSec;
+        //     DWORD nAvgBytesPerSec;
+        //     WORD  nBlockAlign;
+        //     WORD  wBitsPerSample;
+        //     WORD  cbSize;
+        // } WAVEFORMATEX;
+        // ```
+        // It appears that in either case, the minimal length of the fmt
+        // section is 16 bytes, meaning that it does include the
+        // `wBitsPerSample` field. (The name is misleading though, because it
+        // is the number of bits used to store a sample, not all of the bits
+        // need to be valid for all versions of the WAVE format.)
+        let format_tag = try!(reader.read_le_u16());
+        let n_channels = try!(reader.read_le_u16());
+        let n_samples_per_sec = try!(reader.read_le_u32());
+        let n_bytes_per_sec = try!(reader.read_le_u32());
+        let block_align = try!(reader.read_le_u16());
+        let bits_per_sample = try!(reader.read_le_u16());
+
+        // Two of the stored fields are redundant, and may be ignored. We do
+        // validate them to fail early for ill-formed files.
+        if (bits_per_sample != block_align / n_channels * 8)
+        || (n_bytes_per_sec != block_align as u32 * n_samples_per_sec) {
+            // TODO: use custom error type
+            return Err(io::Error::new(io::ErrorKind::Other, "Incosistent fmt chunk."));
+        }
+
+        if format_tag != 1 {
+            // TODO: detect the actual tag, and switch to reading WAVEFORMATEX
+            // or WAVEFORMATEXTENSIBLE if indicated by the tag.
+            // TODO: use a custom error type, report proper error.
+            return Err(io::Error::new(io::ErrorKind::Other, "Invalid or unsupported format tag."));
+        }
+
+        // We have read 16 bytes so far. If the fmt chunk is longer, then we
+        // could be dealing with WAVEFORMATEX or WAVEFORMATEXTENSIBLE. This is
+        // not supported at this point.
+        if fmt_chunk_len > 16 {
+            panic!("wave format type not implemented yet");
+        }
+
         let spec = WavSpec {
-            channels: 2,
-            sample_rate: 44100,
-            bits_per_sample: 16
+            channels: n_channels,
+            sample_rate: n_samples_per_sec,
+            bits_per_sample: bits_per_sample as u32
         };
 
         Ok(spec)
@@ -474,4 +542,31 @@ impl<R> WavReader<R> where R: io::Read {
             phantom_sample: marker::PhantomData
         }
     }
+}
+
+/// Tests reading the most basic wav file, one with only a WAVEFORMAT struct.
+#[test]
+fn read_wav_waveformat() {
+    let file = fs::File::open("testsamples/waveformat.wav")
+                        .ok().expect("failed to open file");
+    let buf_reader = io::BufReader::new(file);
+    let wav_reader = WavReader::new(buf_reader)
+                               .ok().expect("failed to read header");
+
+    assert_eq!(wav_reader.spec().channels, 2);
+    assert_eq!(wav_reader.spec().sample_rate, 44100);
+    assert_eq!(wav_reader.spec().bits_per_sample, 16);
+}
+
+#[test]
+fn read_wav_waveformat_ex() {
+    // TODO: add a test sample that uses WAVEFORMATEX and verify that it can be
+    // read properly.
+}
+
+#[test]
+fn read_wav_waveformat_extensible() {
+    // TODO: add a test sample that uses WAVEFORMATEXTENSIBLE (as produced by
+    // Hound itself actually, so this should not be too hard), and verify that
+    // it can be read properly.
 }
