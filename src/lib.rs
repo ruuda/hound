@@ -614,6 +614,11 @@ where R: io::Read,
             None
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let samples_left = self.reader.num_samples - self.reader.samples_read;
+        (samples_left as usize, Some(samples_left as usize))
+    }
 }
 
 /// Tests reading the most basic wav file, one with only a WAVEFORMAT struct.
