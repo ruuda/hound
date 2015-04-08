@@ -9,3 +9,7 @@ license = "GPL-3.0"
 readme = "readme.md"
 homepage = "https://github.com/ruud-v-a/hound"
 repository = "https://github.com/ruud-v-a/hound"
+
+# TODO: enable this when sound_stream (or portaudio, actually) builds properly.
+# [dev-dependencies]
+# sound_stream = "0.3.2"

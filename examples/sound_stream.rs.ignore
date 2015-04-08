@@ -1,0 +1,51 @@
+// Hound -- A WAV encoding decoding library in Rust
+// Copyright (C) 2015 Ruud van Asseldonk
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, version 3 of the License only.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+// This example shows how to play a wav file using the SoundStream crate.
+
+extern crate hound;
+extern crate sound_stream;
+
+use std::env;
+use std::fs;
+use std::io;
+use std::path;
+use hound;
+use sound_stream::{Event, Settings, SoundStream};
+
+fn main() {
+    // Make a WavReader that reads the file provided as program argument.
+    let arg = env::args().nth(1).unwrap();
+    let fname = path::Path::new(&arg);
+    let input = fs::File::open(fname).unwrap();
+    let buf_reader = io::BufReader::new(input);
+    let mut reader = hound::WavReader::new(buf_reader).unwrap();
+
+    // Set up SoundStream to use the specs as found in the wav file.
+    let settings = Settings {
+        sample_hz: reader.spec().sample_rate,
+        frames: 256, // TODO: What is this actually?
+        channels: reader.spec().channels
+    };
+    let stream = SoundStream::<i16, i16>::new().settings(settings)
+                                               .run()
+                                               .unwrap();
+
+    for event in stream.by_ref() {
+        if let Event::Out(buffer, settings) = event {
+            // TODO
+        }
+    }
+}
