@@ -54,6 +54,9 @@ use std::path;
 ///
 /// The methods may be used on any type that implements `io::Write`.
 trait WriteExt: io::Write {
+    /// Writes a signed 16-bit integer in little endian format.
+    fn write_le_i16(&mut self, x: i16) -> io::Result<()>;
+
     /// Writes an unsigned 16-bit integer in little endian format.
     fn write_le_u16(&mut self, x: u16) -> io::Result<()>;
 
@@ -62,6 +65,9 @@ trait WriteExt: io::Write {
 }
 
 impl<W> WriteExt for W where W: io::Write {
+    fn write_le_i16(&mut self, x: i16) -> io::Result<()> {
+        self.write_le_u16(x as u16)
+    }
 
     fn write_le_u16(&mut self, x: u16) -> io::Result<()> {
         let mut buf = [0u8; 2];
