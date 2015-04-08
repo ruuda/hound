@@ -158,21 +158,22 @@ impl<R> ReadExt for R where R: io::Read {
 
 /// A type that can be used to represent audio samples.
 pub trait Sample {
-    /// Writes the audio sample to the WAVE data section.
+    /// Writes the audio sample to the WAVE data chunk.
     fn write<W: io::Write>(self, writer: &mut W, bits: u32) -> io::Result<()>;
-}
 
-impl Sample for u16 {
-    fn write<W: io::Write>(self, writer: &mut W, bits: u32) -> io::Result<()> {
-        writer.write_le_u16(self)
-        // TODO: take bits into account
-    }
+    /// Reads the audio sample from the WAVE data chunk.
+    fn read<R: io::Read>(reader: &mut R, bits: u32) -> io::Result<Self>;
 }
 
 impl Sample for i16 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u32) -> io::Result<()> {
-        writer.write_le_u16(self as u16)
-        // TODO: take bits into account
+        writer.write_le_i16(self)
+        // TODO: take bits into account.
+    }
+
+    fn read<R: io::Read>(reader: &mut R, bits: u32) -> io::Result<i16> {
+        reader.read_le_i16()
+        // TODO: take bits into account.
     }
 }
 
@@ -413,6 +414,9 @@ pub struct WavReader<R> {
     /// number of samples is always less than 2^32.
     num_samples: u32,
 
+    /// The number of samples read so far.
+    samples_read: u32,
+
     /// The reader from which the WAVE format is read.
     reader: R
 }
@@ -556,12 +560,17 @@ impl<R> WavReader<R> where R: io::Read {
     /// demand.
     pub fn new(mut reader: R) -> io::Result<WavReader<R>> {
         try!(WavReader::read_wave_header(&mut reader));
+
+        // TODO: read chunk header first, then match on the type, and read the
+        // chunk, skip it if unknown, or wait if it is the data chunk.
         let spec = try!(WavReader::read_fmt_chunk(&mut reader));
         let data_len = try!(WavReader::read_data_chunk(&mut reader));
 
+        let num_samples = data_len / (spec.bits_per_sample / 8);
         let wav_reader = WavReader {
             spec: spec,
-            num_samples: data_len / (spec.bits_per_sample / 8),
+            num_samples: num_samples,
+            samples_read: num_samples,
             reader: reader
         };
 
@@ -581,6 +590,22 @@ impl<R> WavReader<R> where R: io::Read {
         WavSamples {
             reader: self,
             phantom_sample: marker::PhantomData
+        }
+    }
+}
+
+impl<'wr, R, S> Iterator for WavSamples<'wr, R, S>
+where R: io::Read,
+      S: Sample {
+    type Item = io::Result<S>;
+
+    fn next(&mut self) -> Option<io::Result<S>> {
+        let reader = &mut self.reader;
+        if reader.samples_read < reader.num_samples {
+            reader.samples_read += 1;
+            Some(Sample::read(&mut reader.reader, reader.spec.bits_per_sample))
+        } else {
+            None
         }
     }
 }
