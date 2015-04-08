@@ -613,18 +613,22 @@ where R: io::Read,
 /// Tests reading the most basic wav file, one with only a WAVEFORMAT struct.
 #[test]
 fn read_wav_waveformat() {
-    let file = fs::File::open("testsamples/waveformat.wav")
+    let file = fs::File::open("testsamples/waveformat-16bit-44100Hz-mono.wav")
                         .ok().expect("failed to open file");
     let buf_reader = io::BufReader::new(file);
-    let wav_reader = WavReader::new(buf_reader)
-                               .ok().expect("failed to read header");
+    let mut wav_reader = WavReader::new(buf_reader)
+                                   .ok().expect("failed to read header");
 
-    assert_eq!(wav_reader.spec().channels, 2);
+    assert_eq!(wav_reader.spec().channels, 1);
     assert_eq!(wav_reader.spec().sample_rate, 44100);
     assert_eq!(wav_reader.spec().bits_per_sample, 16);
 
-    // TODO: implement Iterator for samples.
-    // let samples: Vec<i16> = wav_reader.samples().collect();
+    let samples: Vec<i16> = wav_reader.samples()
+                                      .map(|r| r.ok().unwrap())
+                                      .collect();
+
+    // The test file has been prepared with these exact four samples.
+    assert_eq!(&samples[..], &[2, -3, 5, -7]);
 }
 
 #[test]
