@@ -36,13 +36,17 @@ fn main() {
     let mut voice = cpal::Voice::new();
 
     let mut append_data = |voice: &mut cpal::Voice| {
-        let mut buffer: cpal::Buffer<i16> =
+        let mut buffer: cpal::Buffer<u16> =
             voice.append_data(spec.channels,
                               cpal::SamplesRate(spec.sample_rate),
                               1024); // TODO: Do I know the number of samples?
         // Fill the cpal buffer with data from the wav file.
-        for (dest, src) in buffer.iter_mut().zip(reader.samples()) {
-            *dest = src.unwrap();
+        for (dest, src) in buffer.iter_mut().zip(reader.samples::<i16>()) {
+            // TODO: Without the cast, there are a lot of artefacts. This
+            // suggests that samples are actually unsigned. We can find out by
+            // computing the mean: if it is around 0i16, then samples are signed.
+            // If it is around 32000u16, then samples are unsigned.
+            *dest = src.unwrap() as u16;
         }
         // TODO: check when reader is done, then exit.
     };
