@@ -13,3 +13,4 @@ Hound is licensed under the [GNU General Public License][gplv3].
 [gplv3]:  https://www.gnu.org/licenses/gpl.html
 
 [![Build Status](https://travis-ci.org/ruud-v-a/hound.svg?branch=master)](https://travis-ci.org/ruud-v-a/hound)
+[![Crates.io version](http://img.shields.io/crates/v/hound.svg)](https://crates.io/crates/hound)
