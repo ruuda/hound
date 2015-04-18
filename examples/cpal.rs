@@ -24,8 +24,8 @@ use std::io;
 
 fn main() {
     // Make a WavReader that reads the file provided as program argument.
-    let fname = env::args().nth(1).unwrap();
-    let input = fs::File::open(&fname).unwrap();
+    let fname = env::args().nth(1).expect("no file given");
+    let input = fs::File::open(&fname).ok().expect("invalid file");
     let buf_reader = io::BufReader::new(input);
     let mut reader = hound::WavReader::new(buf_reader).unwrap();
     let spec = reader.spec().clone(); // TODO: by value might be better in this case.
