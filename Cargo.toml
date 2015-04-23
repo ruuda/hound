@@ -10,10 +10,8 @@ readme = "readme.md"
 homepage = "https://github.com/ruud-v-a/hound"
 repository = "https://github.com/ruud-v-a/hound"
 
-# [dev-dependencies]
-# cpal = "0.0.19"
-[dev-dependencies.cpal]
-git = "https://github.com/tomaka/cpal.git"
+[dev-dependencies]
+cpal = "0.0.20"
 
 # TODO: enable this when sound_stream (or portaudio, actually) builds properly.
 # sound_stream = "0.3.2"
