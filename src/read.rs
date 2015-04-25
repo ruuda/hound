@@ -285,13 +285,15 @@ impl<R> WavReader<R> where R: io::Read {
 impl<'wr, R, S> Iterator for WavSamples<'wr, R, S>
 where R: io::Read,
       S: Sample {
-    type Item = io::Result<S>;
+    type Item = Result<S>;
 
-    fn next(&mut self) -> Option<io::Result<S>> {
+    fn next(&mut self) -> Option<Result<S>> {
         let reader = &mut self.reader;
         if reader.samples_read < reader.num_samples {
             reader.samples_read += 1;
-            Some(Sample::read(&mut reader.reader, reader.spec.bits_per_sample))
+            let sample = Sample::read(&mut reader.reader,
+                                      reader.spec.bits_per_sample);
+            Some(sample.map_err(Error::from))
         } else {
             None
         }
