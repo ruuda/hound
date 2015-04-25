@@ -15,7 +15,7 @@
 
 use std::io;
 use std::marker;
-use super::{Sample, WavSpec};
+use super::{Error, Result, Sample, WavSpec};
 
 // TODO: Can this be unified among Hound and Claxon? Copy + Paste is bad, but
 // I refuse to use an external crate just to read into an array of bytes, or
@@ -119,15 +119,14 @@ pub struct WavSamples<'wr, R, S> where R: 'wr {
 impl<R> WavReader<R> where R: io::Read {
 
     /// Reads the RIFF WAVE header, returns the supposed file size.
-    fn read_wave_header(reader: &mut R) -> io::Result<u32> {
+    fn read_wave_header(reader: &mut R) -> Result<u32> {
         // Every WAVE file starts with the four bytes 'RIFF' and a file length.
         // TODO: the old approach of having a slice on the stack and reading
         // into it is more cumbersome, but also avoids a heap allocation. Is
         // the compiler smart enough to avoid the heap allocation anyway? I
         // would not expect it to be.
         if "RIFF".as_bytes() != &try!(reader.read_bytes(4))[..] {
-            // TODO: use custom error type
-            return Err(io::Error::new(io::ErrorKind::Other, "No RIFF tag found."));
+            return Err(Error::FormatError("no RIFF tag found"));
         }
 
         // TODO: would this be useful anywhere? Probably not, except for
@@ -137,22 +136,20 @@ impl<R> WavReader<R> where R: io::Read {
         // Next four bytes indicate the file type, which should be WAVE.
         if "WAVE".as_bytes() != &try!(reader.read_bytes(4))[..] {
             // TODO: use custom error type
-            return Err(io::Error::new(io::ErrorKind::Other, "No WAVE tag found."));
+            return Err(Error::FormatError("no WAVE tag found"));
         }
 
         Ok(file_len)
     }
 
-    // TODO: define a custom error type to report ill-formed files.
     /// Reads the fmt chunk of the file, returns the information it provides.
-    fn read_fmt_chunk(reader: &mut R) -> io::Result<WavSpec> {
+    fn read_fmt_chunk(reader: &mut R) -> Result<WavSpec> {
         // Then a "fmt " chunk should follow.
         // TODO: is the "fmt " block always the first block? Should this be
         // flexible? It should anyway, so this hardly matters. For now, we
         // expect only an "fmt " block first, and then a "data" block.
         if "fmt ".as_bytes() != &try!(reader.read_bytes(4))[..] {
-            // TODO: use custom error type
-            return Err(io::Error::new(io::ErrorKind::Other, "No fmt block found."));
+            return Err(Error::FormatError("no fmt chunk found"));
         }
         let fmt_chunk_len = try!(reader.read_le_u32());
 
@@ -161,8 +158,7 @@ impl<R> WavReader<R> where R: io::Read {
         // file. I have not encountered a file with a 14-byte fmt section
         // though. If you ever encounter such file, please contact me.
         if fmt_chunk_len < 16 {
-            // TODO: use custom error type
-            return Err(io::Error::new(io::ErrorKind::Other, "Invalid fmt chunck size."));
+            return Err(Error::FormatError("invalid fmt chunk size"));
         }
 
         // Read the WAVEFORMAT struct, as defined at
@@ -205,15 +201,13 @@ impl<R> WavReader<R> where R: io::Read {
         // validate them to fail early for ill-formed files.
         if (bits_per_sample != block_align / n_channels * 8)
         || (n_bytes_per_sec != block_align as u32 * n_samples_per_sec) {
-            // TODO: use custom error type
-            return Err(io::Error::new(io::ErrorKind::Other, "Incosistent fmt chunk."));
+            return Err(Error::FormatError("inconsistent fmt chunk"));
         }
 
         if format_tag != 1 {
             // TODO: detect the actual tag, and switch to reading WAVEFORMATEX
             // or WAVEFORMATEXTENSIBLE if indicated by the tag.
-            // TODO: use a custom error type, report proper error.
-            return Err(io::Error::new(io::ErrorKind::Other, "Invalid or unsupported format tag."));
+            return Err(Error::FormatError("invalid or unsupported format tag"));
         }
 
         // We have read 16 bytes so far. If the fmt chunk is longer, then we
@@ -233,10 +227,9 @@ impl<R> WavReader<R> where R: io::Read {
     }
 
     /// Reads the header of the data chunk and returns its length.
-    fn read_data_chunk(reader: &mut R) -> io::Result<u32> {
+    fn read_data_chunk(reader: &mut R) -> Result<u32> {
         if "data".as_bytes() != &try!(reader.read_bytes(4))[..] {
-            // TODO: use custom error type
-            return Err(io::Error::new(io::ErrorKind::Other, "No data block found."));
+            return Err(Error::FormatError("no data chunk found"));
         }
         let data_chunk_len = try!(reader.read_le_u32());
         Ok(data_chunk_len)
@@ -247,7 +240,7 @@ impl<R> WavReader<R> where R: io::Read {
     ///
     /// The header is read immediately. Reading the data will be done on
     /// demand.
-    pub fn new(mut reader: R) -> io::Result<WavReader<R>> {
+    pub fn new(mut reader: R) -> Result<WavReader<R>> {
         try!(WavReader::read_wave_header(&mut reader));
 
         // TODO: read chunk header first, then match on the type, and read the
