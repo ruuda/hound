@@ -88,6 +88,10 @@ impl<R> ReadExt for R where R: io::Read {
 }
 
 /// A reader that reads the WAVE format from the underlying reader.
+///
+/// A `WavReader` is a streaming reader. It reads data from the underlying
+/// reader on demand, and it reads no more than strictly necessary. No internal
+/// buffering is performed on the underlying reader.
 pub struct WavReader<R> {
     /// Specification of the file as found in the fmt chunk.
     spec: WavSpec,
@@ -263,7 +267,7 @@ impl<R> WavReader<R> where R: io::Read {
     }
 
     // TODO: Should this return by value instead? A reference is more consistent
-    // with Claxon, but the type is only 80 bytes, barely larger than a pointer.
+    // with Claxon, but the type is only 80 bits, barely larger than a pointer.
     // Is it worth the extra indirection? On the other hand, the indirection
     // is probably optimised away.
     /// Returns information about the WAVE file.
@@ -272,11 +276,11 @@ impl<R> WavReader<R> where R: io::Read {
     }
 
     /// Returns an iterator over all samples.
-    // TODO: how do we handle channels? Add an iterator that yields &[S]?
-    // This is not even possible nicely if the number of channels is not known
-    // in advance. It is not such a problem to have interleaved audio though,
-    // if the user knows. Methods could be provided for stereo iterators, in
-    // case the number of channels is known in advance?
+    ///
+    /// The channel data is is interleaved. The iterator is streaming. That is,
+    /// if you call this method once, read a few samples, and call this method
+    /// again, the second iterator will not start again from the beginning of
+    /// the file, it will continue where the first iterator stopped.
     pub fn samples<'wr, S: Sample>(&'wr mut self) -> WavSamples<'wr, R, S> {
         WavSamples {
             reader: self,
