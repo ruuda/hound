@@ -117,15 +117,6 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
         }
     }
 
-    /// Creates a writer that writes the WAVE format to a file.
-    ///
-    /// The file will be overwritten if it exists.
-    pub fn create<P: AsRef<path::Path>>(filename: P, spec: WavSpec)
-           -> io::Result<WavWriter<fs::File>> {
-        let file = try!(fs::File::create(filename));
-        Ok(WavWriter::new(file, spec))
-    }
-
     /// Writes the RIFF WAVE header
     fn write_header(&mut self) -> io::Result<()> {
         // Useful links:
@@ -258,5 +249,16 @@ impl<W> Drop for WavWriter<W> where W: io::Write + io::Seek {
         if !self.finalized {
             let _r = self.finalize_internal();
         }
+    }
+}
+
+impl WavWriter<fs::File> {
+    /// Creates a writer that writes the WAVE format to a file.
+    ///
+    /// The file will be overwritten if it exists.
+    pub fn create<P: AsRef<path::Path>>(filename: P, spec: WavSpec)
+           -> io::Result<WavWriter<fs::File>> {
+        let file = try!(fs::File::create(filename));
+        Ok(WavWriter::new(file, spec))
     }
 }
