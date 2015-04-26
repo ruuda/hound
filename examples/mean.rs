@@ -1,3 +1,30 @@
+// Hound -- A WAV encoding and decoding library in Rust
+// Copyright (C) 2015 Ruud van Asseldonk
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License, version 3,
+// as published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+// This example computes the mean value and rms of a file, where samples are
+// first interpreted as 16-bit signed integer, and then as a 16-bit unsigned
+// integer. This should allow us to determine whether the samples stored are
+// signed or unsigned: for signed the average value is expected to be 0, and
+// for unsigned the value is expected to be 2^16 - 1.
+//   Note that this example is not a particularly good example of proper coding
+// style; it does not handle failure properly, and it assumes that the provided
+// file has 16 bits per sample.
+
+// TODO: This example should probably be removed, it is just here for verifying
+// and assumption at this point.
+
 extern crate hound;
 
 use std::env;
