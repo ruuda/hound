@@ -31,7 +31,6 @@
 //!     sample_rate: 44100,
 //!     bits_per_sample: 16
 //! };
-//! // TODO: ensure that the type can be inferred.
 //! let writer_res = hound::WavWriter::create("sine.wav", spec);
 //! let mut writer = writer_res.ok().unwrap();
 //! for t in (0 .. 44100).map(|x| x as f32 / 44100.0) {

@@ -237,7 +237,6 @@ impl<R> WavReader<R> where R: io::Read {
         Ok(data_chunk_len)
     }
 
-    // TODO: define a custom error type to report ill-formed files.
     /// Attempts to create a reader that reads the WAVE format.
     ///
     /// The header is read immediately. Reading the data will be done on
