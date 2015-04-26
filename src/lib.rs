@@ -38,6 +38,22 @@
 //! }
 //! writer.finalize().unwrap();
 //! ```
+//!
+//! The following example computes the RMS (root mean square) of the sine wave
+//! written in the previous example.
+//!
+//! ```
+//! use hound;
+//!
+//! // TODO: ensure that Hound can read the files it writes. (Support WAVEFORMAT.)
+//! // let mut reader = hound::WavReader::open("sine.wav").unwrap();
+//! // let (sqr_sum, n) = reader.samples::<i16>()
+//! //                          .fold((0_f64, 0_u32), |(sqr_sum, n), s| {
+//! //     let sample = s.unwrap() as f64;
+//! //     (sqr_sum + sample * sample, n + 1)
+//! // });
+//! // println!("RMS is {}", (sqr_sum / n as f64).sqrt());
+//! ```
 
 #![warn(missing_docs)]
 
