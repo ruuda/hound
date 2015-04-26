@@ -250,6 +250,14 @@ impl<R> WavReader<R> where R: io::Read {
         let data_len = try!(WavReader::read_data_chunk(&mut reader));
 
         let num_samples = data_len / (spec.bits_per_sample / 8);
+
+        // The number of samples must be a multiple of the number of channels,
+        // otherwise the last inter-channel sample would not have data for all
+        // channels.
+        if num_samples % spec.channels as u32 != 0 {
+            return Err(Error::FormatError("invalid data chunk length"));
+        }
+
         let wav_reader = WavReader {
             spec: spec,
             num_samples: num_samples,
@@ -347,8 +355,6 @@ fn duration_and_len_agree() {
         let reader = WavReader::open(fname).unwrap();
         assert_eq!(reader.spec().channels as u32 * reader.duration(),
                    reader.len());
-        // TODO: this could fail if num_samples is not a multiple of channels,
-        // this should be verified in the reader.
     }
 }
 
