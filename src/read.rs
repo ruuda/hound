@@ -281,6 +281,25 @@ impl<R> WavReader<R> where R: io::Read {
             phantom_sample: marker::PhantomData
         }
     }
+
+    /// Returns the duration of the file in samples.
+    ///
+    /// The duration is independent of the number of channels. It is expressed
+    /// in units of samples. The duration in seconds can be obtained by
+    /// dividing this number by the sample rate. The duration is independent of
+    /// how many samples have been read already.
+    pub fn duration(&self) -> u32 {
+        self.num_samples / self.spec.channels as u32
+    }
+
+    /// Returns the number of values that the sample iterator will yield.
+    ///
+    /// The length of the file is its duration (in samples) times the number of
+    /// channels. The length is independent of how many samples have been read
+    /// already.
+    pub fn len(&self) -> u32 {
+        self.num_samples
+    }
 }
 
 impl WavReader<io::BufReader<fs::File>> {
@@ -316,6 +335,20 @@ where R: io::Read,
     fn size_hint(&self) -> (usize, Option<usize>) {
         let samples_left = self.reader.num_samples - self.reader.samples_read;
         (samples_left as usize, Some(samples_left as usize))
+    }
+}
+
+#[test]
+fn duration_and_len_agree() {
+    // TODO: add test samples with more channels.
+    let files = &["testsamples/waveformat-16bit-44100Hz-mono.wav"];
+
+    for fname in files {
+        let reader = WavReader::open(fname).unwrap();
+        assert_eq!(reader.spec().channels as u32 * reader.duration(),
+                   reader.len());
+        // TODO: this could fail if num_samples is not a multiple of channels,
+        // this should be verified in the reader.
     }
 }
 
