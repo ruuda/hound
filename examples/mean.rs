@@ -6,23 +6,24 @@ fn main() {
     let fname = env::args().nth(1).expect("no file given");
     let mut reader = hound::WavReader::open(&fname).unwrap();
     let samples: Vec<i16> = reader.samples().map(|s| s.unwrap()).collect();
-    let (sig, unsig, n) = samples.iter().fold((0_f64, 0_f64, 0_u32), |(sig, unsig, n), &s| {
-        let sample = s;
-        let sig = sig + sample as f64;
-        let unsig = unsig + (sample as u16) as f64;
-        (sig, unsig, n + 1)
-    });
-    let ms = sig / n as f64;
-    let mu = unsig / n as f64;
-    println!("mean signed:   {}\nmean unsigned: {}", ms, mu);
 
-    let (dsig, dunsig, n) = samples.iter().fold((0_f64, 0_f64, 0_u32), |(dsig, dunsig, n), &s| {
-        let sample = s;
-        let ds = sample as f64 - ms;
-        let du = (sample as u16) as f64 - mu;
-        (dsig + ds * ds, dunsig + du * du, n + 1)
+    let (ts, tu, n) = samples.iter().fold((0.0, 0.0, 0.0), |(ts, tu, n), &s| {
+        let signed = s as f64;
+        let unsigned = (s as u16) as f64;
+        (ts + signed, tu + unsigned, n + 1.0)
     });
-    let ds = dsig / n as f64;
-    let du = dunsig / n as f64;
-    println!("rms signed:    {}\nrms unsigned:  {}", ds.sqrt(), du.sqrt());
+    let ms = ts / n;
+    let mu = tu / n;
+    println!("mean signed:   {} (should be 0, deviation is {})", ms, ms.abs());
+    println!("mean unsigned: {} (should be 2^16 - 1, deviation is {})", mu, (mu - 32767.0).abs());
+
+    let (ts, tu) = samples.iter().fold((0.0, 0.0), |(ts, tu), &s| {
+        let ds = s as f64 - ms;
+        let du = (s as u16) as f64 - mu;
+        (ts + ds * ds, tu + du * du)
+    });
+    let rmss = (ts / n).sqrt();
+    let rmsu = (tu / n).sqrt();
+    println!("rms signed:    {}", rmss);
+    println!("rms unsigned:  {}", rmsu);
 }
