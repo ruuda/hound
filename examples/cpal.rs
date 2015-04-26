@@ -19,15 +19,11 @@ extern crate hound;
 extern crate cpal;
 
 use std::env;
-use std::fs;
-use std::io;
 
 fn main() {
     // Make a WavReader that reads the file provided as program argument.
     let fname = env::args().nth(1).expect("no file given");
-    let input = fs::File::open(&fname).ok().expect("invalid file");
-    let buf_reader = io::BufReader::new(input);
-    let mut reader = hound::WavReader::new(buf_reader).unwrap();
+    let mut reader = hound::WavReader::open(fname).unwrap();
     let spec = reader.spec().clone(); // TODO: by value might be better in this case.
 
     // A voice in cpal is used for playback.

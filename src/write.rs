@@ -255,7 +255,9 @@ impl<W> Drop for WavWriter<W> where W: io::Write + io::Seek {
 impl WavWriter<fs::File> {
     /// Creates a writer that writes the WAVE format to a file.
     ///
-    /// The file will be overwritten if it exists.
+    /// This is a convenience constructor that creates the file and then
+    /// constructs a `WavReader` from it. The file will be overwritten if it
+    /// exists.
     pub fn create<P: AsRef<path::Path>>(filename: P, spec: WavSpec)
            -> io::Result<WavWriter<fs::File>> {
         let file = try!(fs::File::create(filename));

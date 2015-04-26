@@ -13,8 +13,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::fs;
 use std::io;
 use std::marker;
+use std::path;
 use super::{Error, Result, Sample, WavSpec};
 
 // TODO: Can this be unified among Hound and Claxon? Copy + Paste is bad, but
@@ -279,6 +281,19 @@ impl<R> WavReader<R> where R: io::Read {
             reader: self,
             phantom_sample: marker::PhantomData
         }
+    }
+}
+
+impl WavReader<io::BufReader<fs::File>> {
+    /// Attempts to create a reader that reads from the specified file.
+    ///
+    /// This is a convenience constructor that opens a `File`, wraps it in a
+    /// `BufReader` and then constructs a `WavReader` from it.
+    pub fn open<P: AsRef<path::Path>>(filename: P)
+                -> Result<WavReader<io::BufReader<fs::File>>> {
+        let file = try!(fs::File::open(filename));
+        let buf_reader = io::BufReader::new(file);
+        WavReader::new(buf_reader)
     }
 }
 
