@@ -159,7 +159,8 @@ impl<R> WavReader<R> where R: io::Read {
 
     /// Attempts to read an 8-byte chunk header.
     fn read_chunk_header(reader: &mut R) -> Result<ChunkHeader> {
-        let kind_str = try!(reader.read_bytes(4));
+        let mut kind_str = [0; 4];
+        try!(reader.read_into(&mut kind_str));
         let len = try!(reader.read_le_u32());
 
         let kind = match &kind_str[..] {
