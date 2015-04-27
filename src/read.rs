@@ -140,7 +140,7 @@ impl<R> WavReader<R> where R: io::Read {
         // into it is more cumbersome, but also avoids a heap allocation. Is
         // the compiler smart enough to avoid the heap allocation anyway? I
         // would not expect it to be.
-        if "RIFF".as_bytes() != &try!(reader.read_bytes(4))[..] {
+        if b"RIFF" != &try!(reader.read_bytes(4))[..] {
             return Err(Error::FormatError("no RIFF tag found"));
         }
 
@@ -149,7 +149,7 @@ impl<R> WavReader<R> where R: io::Read {
         let file_len = try!(reader.read_le_u32());
 
         // Next four bytes indicate the file type, which should be WAVE.
-        if "WAVE".as_bytes() != &try!(reader.read_bytes(4))[..] {
+        if b"WAVE" != &try!(reader.read_bytes(4))[..] {
             // TODO: use custom error type
             return Err(Error::FormatError("no WAVE tag found"));
         }
