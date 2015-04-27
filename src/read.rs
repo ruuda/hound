@@ -89,6 +89,19 @@ impl<R> ReadExt for R where R: io::Read {
     }
 }
 
+/// The different chunks that a WAVE file can contain.
+enum ChunkKind {
+    Fmt,
+    Data,
+    Unknown
+}
+
+/// Describes the structure of a chunk in the WAVE file.
+struct ChunkHeader {
+    pub kind: ChunkKind,
+    pub len: u32
+}
+
 /// A reader that reads the WAVE format from the underlying reader.
 ///
 /// A `WavReader` is a streaming reader. It reads data from the underlying
@@ -144,22 +157,27 @@ impl<R> WavReader<R> where R: io::Read {
         Ok(file_len)
     }
 
-    /// Reads the fmt chunk of the file, returns the information it provides.
-    fn read_fmt_chunk(reader: &mut R) -> Result<WavSpec> {
-        // Then a "fmt " chunk should follow.
-        // TODO: is the "fmt " block always the first block? Should this be
-        // flexible? It should anyway, so this hardly matters. For now, we
-        // expect only an "fmt " block first, and then a "data" block.
-        if "fmt ".as_bytes() != &try!(reader.read_bytes(4))[..] {
-            return Err(Error::FormatError("no fmt chunk found"));
-        }
-        let fmt_chunk_len = try!(reader.read_le_u32());
+    /// Attempts to read an 8-byte chunk header.
+    fn read_chunk_header(reader: &mut R) -> Result<ChunkHeader> {
+        let kind_str = try!(reader.read_bytes(4));
+        let len = try!(reader.read_le_u32());
 
+        let kind = match &kind_str[..] {
+            b"fmt " => ChunkKind::Fmt,
+            b"data" => ChunkKind::Data,
+            _ => ChunkKind::Unknown
+        };
+
+        Ok(ChunkHeader { kind: kind, len: len })
+    }
+
+    /// Reads the fmt chunk of the file, returns the information it provides.
+    fn read_fmt_chunk(reader: &mut R, chunk_len: u32) -> Result<WavSpec> {
         // A minimum chunk length of at least 16 is assumed. Note: actually,
-        // the first 14 bytes contain enough information to0 fully specify the
+        // the first 14 bytes contain enough information to fully specify the
         // file. I have not encountered a file with a 14-byte fmt section
         // though. If you ever encounter such file, please contact me.
-        if fmt_chunk_len < 16 {
+        if chunk_len < 16 {
             return Err(Error::FormatError("invalid fmt chunk size"));
         }
 
@@ -215,7 +233,7 @@ impl<R> WavReader<R> where R: io::Read {
         // We have read 16 bytes so far. If the fmt chunk is longer, then we
         // could be dealing with WAVEFORMATEX or WAVEFORMATEXTENSIBLE. This is
         // not supported at this point.
-        if fmt_chunk_len > 16 {
+        if chunk_len > 16 {
             panic!("wave format type not implemented yet");
         }
 
@@ -228,13 +246,44 @@ impl<R> WavReader<R> where R: io::Read {
         Ok(spec)
     }
 
-    /// Reads the header of the data chunk and returns its length.
-    fn read_data_chunk(reader: &mut R) -> Result<u32> {
-        if "data".as_bytes() != &try!(reader.read_bytes(4))[..] {
-            return Err(Error::FormatError("no data chunk found"));
+    /// Reads chunks until a data chunk is encountered.
+    ///
+    /// Returns the information from the fmt chunk and the length of the data
+    /// chunk in bytes. Afterwards, the reader will be positioned at the first
+    /// content byte of the data chunk.
+    fn read_until_data(mut reader: R) -> Result<(WavSpec, u32)> {
+        let mut spec_opt = None;
+
+        loop {
+            let header = try!(WavReader::read_chunk_header(&mut reader));
+            match header.kind {
+                ChunkKind::Fmt => {
+                    let spec = try!(WavReader::read_fmt_chunk(&mut reader,
+                                                              header.len));
+                    spec_opt = Some(spec);
+                },
+                ChunkKind::Data => {
+                    // The "fmt" chunk must precede the "data" chunk. Any
+                    // chunks that come after the data chunk will be ignored.
+                    if let Some(spec) = spec_opt {
+                        return Ok((spec, header.len));
+                    } else {
+                        return Err(Error::FormatError("missing fmt chunk"));
+                    }
+                },
+                ChunkKind::Unknown => {
+                    // Ignore the chunk; skip all of its bytes.
+                    // TODO: this could be more efficient by not allocating
+                    // space on the heap, reading into it and then dropping it
+                    // without use. For now, this solution is simplest. If Seek
+                    // is supported we could skip, but that is a stronger bound
+                    // than what is required ...
+                    try!(reader.read_bytes(header.len as usize));
+                }
+            }
+            // If no data chunk is ever encountered, the function will return
+            // via one of the try! macros that return an Err on end of file.
         }
-        let data_chunk_len = try!(reader.read_le_u32());
-        Ok(data_chunk_len)
     }
 
     /// Attempts to create a reader that reads the WAVE format.
@@ -243,11 +292,7 @@ impl<R> WavReader<R> where R: io::Read {
     /// demand.
     pub fn new(mut reader: R) -> Result<WavReader<R>> {
         try!(WavReader::read_wave_header(&mut reader));
-
-        // TODO: read chunk header first, then match on the type, and read the
-        // chunk, skip it if unknown, or wait if it is the data chunk.
-        let spec = try!(WavReader::read_fmt_chunk(&mut reader));
-        let data_len = try!(WavReader::read_data_chunk(&mut reader));
+        let (spec, data_len) = try!(WavReader::read_until_data(&mut reader));
 
         let num_samples = data_len / (spec.bits_per_sample / 8);
 
