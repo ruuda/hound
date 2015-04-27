@@ -150,7 +150,6 @@ impl<R> WavReader<R> where R: io::Read {
 
         // Next four bytes indicate the file type, which should be WAVE.
         if b"WAVE" != &try!(reader.read_bytes(4))[..] {
-            // TODO: use custom error type
             return Err(Error::FormatError("no WAVE tag found"));
         }
 
