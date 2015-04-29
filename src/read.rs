@@ -234,7 +234,7 @@ impl<R> WavReader<R> where R: io::Read {
         // could be dealing with WAVEFORMATEX or WAVEFORMATEXTENSIBLE. This is
         // not supported at this point.
         if chunk_len > 16 {
-            panic!("wave format type not implemented yet");
+            return Err(Error::FormatError("wave format type not implemented yet"));
         }
 
         let spec = WavSpec {
