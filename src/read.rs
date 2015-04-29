@@ -124,6 +124,9 @@ pub struct WavReader<R> {
     /// Specification of the file as found in the fmt chunk.
     spec: WavSpec,
 
+    /// The number of bytes used to store a sample in the stream.
+    bytes_per_sample: u16,
+
     /// The number of samples in the data chunk.
     ///
     /// The data chunk is limited to a 4 GiB length because its header has a
@@ -133,9 +136,6 @@ pub struct WavReader<R> {
 
     /// The number of samples read so far.
     samples_read: u32,
-
-    /// The number of bytes used to store a sample in the stream.
-    bytes_per_sample: u16,
 
     /// The reader from which the WAVE format is read.
     reader: R
@@ -247,7 +247,7 @@ impl<R> WavReader<R> where R: io::Read {
         };
 
         match format_tag {
-            1 => WavReader::read_waveformat(chunk_len, spec),
+            1 => WavReader::<R>::read_waveformat(chunk_len, spec),
             // TODO: implement WAVEFORMATEX and WAVEFORMATEXTENSIBLE, maybe
             // introduce a different error kind for unsupported tag type.
             _ => Err(Error::FormatError("invalid or unsupported format tag"))
@@ -333,9 +333,9 @@ impl<R> WavReader<R> where R: io::Read {
 
         let wav_reader = WavReader {
             spec: spec_ex.spec,
+            bytes_per_sample: spec_ex.bytes_per_sample,
             num_samples: num_samples,
             samples_read: 0,
-            bytes_per_sample: spec_ex.bytes_per_sample,
             reader: reader
         };
 
@@ -406,6 +406,8 @@ where R: io::Read,
         let reader = &mut self.reader;
         if reader.samples_read < reader.num_samples {
             reader.samples_read += 1;
+            // TODO: determine how many bytes to read from reader.bytes_per_sample,
+            // not from the Sample type itself.
             let sample = Sample::read(&mut reader.reader,
                                       reader.spec.bits_per_sample);
             Some(sample.map_err(Error::from))
