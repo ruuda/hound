@@ -83,7 +83,7 @@ pub struct WavWriter<W> where W: io::Write + io::Seek {
     spec: WavSpec,
 
     /// The (container) bytes per sample. This is the bit rate / 8 rounded up.
-    bytes_per_sample: u32,
+    bytes_per_sample: u16,
 
     /// Whether the header has been written already.
     wrote_header: bool,
@@ -109,7 +109,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     pub fn new(writer: W, spec: WavSpec) -> WavWriter<W> {
         WavWriter {
             spec: spec,
-            bytes_per_sample: (spec.bits_per_sample as f32 / 8.0).ceil() as u32,
+            bytes_per_sample: (spec.bits_per_sample as f32 / 8.0).ceil() as u16,
             wrote_header: false,
             writer: io::BufWriter::new(writer),
             data_bytes_written: 0,
@@ -149,7 +149,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
             // The field nSamplesPerSec.
             try!(buffer.write_le_u32(spec.sample_rate));
             let bytes_per_sec = spec.sample_rate
-                              * self.bytes_per_sample
+                              * self.bytes_per_sample as u32
                               * spec.channels as u32;
             // The field nAvgBytesPerSec;
             try!(buffer.write_le_u32(bytes_per_sec));
@@ -161,7 +161,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
             // The field cbSize, the number of remaining bytes in the struct.
             try!(buffer.write_le_u16(22));
             // The field wValidBitsPerSample, the real number of bits per sample.
-            try!(buffer.write_le_u16(self.spec.bits_per_sample as u16));
+            try!(buffer.write_le_u16(self.spec.bits_per_sample));
             // The field dwChannelMask.
             // TODO: add the option to specify the channel mask. For now, use
             // the default assignment.
@@ -205,7 +205,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
 
         // TODO: do we need bits per sample? Is the padding at the obvious side?
         try!(sample.write(&mut self.writer, self.bytes_per_sample));
-        self.data_bytes_written += self.bytes_per_sample;
+        self.data_bytes_written += self.bytes_per_sample as u32;
         Ok(())
     }
 

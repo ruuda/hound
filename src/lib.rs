@@ -74,19 +74,19 @@ pub use write::WavWriter;
 /// A type that can be used to represent audio samples.
 pub trait Sample {
     /// Writes the audio sample to the WAVE data chunk.
-    fn write<W: io::Write>(self, writer: &mut W, bits: u32) -> io::Result<()>;
+    fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> io::Result<()>;
 
     /// Reads the audio sample from the WAVE data chunk.
-    fn read<R: io::Read>(reader: &mut R, bits: u32) -> io::Result<Self>;
+    fn read<R: io::Read>(reader: &mut R, bits: u16) -> io::Result<Self>;
 }
 
 impl Sample for i16 {
-    fn write<W: io::Write>(self, writer: &mut W, bits: u32) -> io::Result<()> {
+    fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> io::Result<()> {
         writer.write_le_i16(self)
         // TODO: take bits into account.
     }
 
-    fn read<R: io::Read>(reader: &mut R, bits: u32) -> io::Result<i16> {
+    fn read<R: io::Read>(reader: &mut R, bits: u16) -> io::Result<i16> {
         reader.read_le_i16()
         // TODO: take bits into account.
     }
@@ -106,7 +106,7 @@ pub struct WavSpec {
     /// The number of bits per sample.
     ///
     /// A common value is 16 bits per sample, which is used for CD audio.
-    pub bits_per_sample: u32
+    pub bits_per_sample: u16
 }
 
 /// The error type for operations on `WavReader` and `WavWriter`.

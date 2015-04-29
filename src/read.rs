@@ -240,7 +240,7 @@ impl<R> WavReader<R> where R: io::Read {
         let spec = WavSpec {
             channels: n_channels,
             sample_rate: n_samples_per_sec,
-            bits_per_sample: bits_per_sample as u32
+            bits_per_sample: bits_per_sample
         };
 
         Ok(spec)
@@ -294,7 +294,7 @@ impl<R> WavReader<R> where R: io::Read {
         try!(WavReader::read_wave_header(&mut reader));
         let (spec, data_len) = try!(WavReader::read_until_data(&mut reader));
 
-        let num_samples = data_len / (spec.bits_per_sample / 8);
+        let num_samples = data_len / (spec.bits_per_sample as u32 / 8);
 
         // The number of samples must be a multiple of the number of channels,
         // otherwise the last inter-channel sample would not have data for all
