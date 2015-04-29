@@ -102,6 +102,19 @@ struct ChunkHeader {
     pub len: u32
 }
 
+/// Specifies properties of the audio data, as well as the layout of the stream.
+#[derive(Clone, Copy)]
+struct WavSpecEx {
+    /// The normal information about the audio data.
+    ///
+    /// Bits per sample here is the number of _used_ bits per sample, not the
+    /// number of bits used to _store_ a sample.
+    spec: WavSpec,
+
+    /// The number of bytes used to store a sample.
+    bytes_per_sample: u16
+}
+
 /// A reader that reads the WAVE format from the underlying reader.
 ///
 /// A `WavReader` is a streaming reader. It reads data from the underlying
@@ -120,6 +133,9 @@ pub struct WavReader<R> {
 
     /// The number of samples read so far.
     samples_read: u32,
+
+    /// The number of bytes used to store a sample in the stream.
+    bytes_per_sample: u16,
 
     /// The reader from which the WAVE format is read.
     reader: R
@@ -172,7 +188,7 @@ impl<R> WavReader<R> where R: io::Read {
     }
 
     /// Reads the fmt chunk of the file, returns the information it provides.
-    fn read_fmt_chunk(reader: &mut R, chunk_len: u32) -> Result<WavSpec> {
+    fn read_fmt_chunk(reader: &mut R, chunk_len: u32) -> Result<WavSpecEx> {
         // A minimum chunk length of at least 16 is assumed. Note: actually,
         // the first 14 bytes contain enough information to fully specify the
         // file. I have not encountered a file with a 14-byte fmt section
@@ -224,26 +240,38 @@ impl<R> WavReader<R> where R: io::Read {
             return Err(Error::FormatError("inconsistent fmt chunk"));
         }
 
-        if format_tag != 1 {
-            // TODO: detect the actual tag, and switch to reading WAVEFORMATEX
-            // or WAVEFORMATEXTENSIBLE if indicated by the tag.
-            return Err(Error::FormatError("invalid or unsupported format tag"));
-        }
-
-        // We have read 16 bytes so far. If the fmt chunk is longer, then we
-        // could be dealing with WAVEFORMATEX or WAVEFORMATEXTENSIBLE. This is
-        // not supported at this point.
-        if chunk_len > 16 {
-            panic!("wave format type not implemented yet");
-        }
-
         let spec = WavSpec {
             channels: n_channels,
             sample_rate: n_samples_per_sec,
             bits_per_sample: bits_per_sample
         };
 
-        Ok(spec)
+        match format_tag {
+            1 => WavReader::read_waveformat(chunk_len, spec),
+            // TODO: implement WAVEFORMATEX and WAVEFORMATEXTENSIBLE, maybe
+            // introduce a different error kind for unsupported tag type.
+            _ => Err(Error::FormatError("invalid or unsupported format tag"))
+        }
+    }
+
+    fn read_waveformat(chunk_len: u32, spec: WavSpec) -> Result<WavSpecEx> {
+       // A WAVEFORMAT fmt block should be 16 bytes long.
+       if chunk_len != 16 {
+           return Err(Error::FormatError("unexpected fmt chunk size"));
+       }
+
+       // The bits per sample for a WAVEFORMAT struct is the number of used
+       // bits per sample, as well as the number of bits used to store the
+       // sample, so it must be a multiple of 8.
+       if spec.bits_per_sample % 8 != 0 {
+           return Err(Error::FormatError("bits per sample is not a multiple of 8"));
+       }
+
+       let spec_ex = WavSpecEx {
+           spec: spec,
+           bytes_per_sample: spec.bits_per_sample / 8
+       };
+       Ok(spec_ex)
     }
 
     /// Reads chunks until a data chunk is encountered.
@@ -251,7 +279,7 @@ impl<R> WavReader<R> where R: io::Read {
     /// Returns the information from the fmt chunk and the length of the data
     /// chunk in bytes. Afterwards, the reader will be positioned at the first
     /// content byte of the data chunk.
-    fn read_until_data(mut reader: R) -> Result<(WavSpec, u32)> {
+    fn read_until_data(mut reader: R) -> Result<(WavSpecEx, u32)> {
         let mut spec_opt = None;
 
         loop {
@@ -292,21 +320,22 @@ impl<R> WavReader<R> where R: io::Read {
     /// demand.
     pub fn new(mut reader: R) -> Result<WavReader<R>> {
         try!(WavReader::read_wave_header(&mut reader));
-        let (spec, data_len) = try!(WavReader::read_until_data(&mut reader));
+        let (spec_ex, data_len) = try!(WavReader::read_until_data(&mut reader));
 
-        let num_samples = data_len / (spec.bits_per_sample as u32 / 8);
+        let num_samples = data_len / spec_ex.bytes_per_sample as u32;
 
         // The number of samples must be a multiple of the number of channels,
         // otherwise the last inter-channel sample would not have data for all
         // channels.
-        if num_samples % spec.channels as u32 != 0 {
+        if num_samples % spec_ex.spec.channels as u32 != 0 {
             return Err(Error::FormatError("invalid data chunk length"));
         }
 
         let wav_reader = WavReader {
-            spec: spec,
+            spec: spec_ex.spec,
             num_samples: num_samples,
             samples_read: 0,
+            bytes_per_sample: spec_ex.bytes_per_sample,
             reader: reader
         };
 
