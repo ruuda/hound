@@ -240,38 +240,109 @@ impl<R> WavReader<R> where R: io::Read {
             return Err(Error::FormatError("inconsistent fmt chunk"));
         }
 
+        // The bits per sample for a WAVEFORMAT struct is the number of bits
+        // used to store a sample. Therefore, it must be a multiple of 8.
+        if bits_per_sample % 8 != 0 {
+           return Err(Error::FormatError("bits per sample is not a multiple of 8"));
+        }
+
         let spec = WavSpec {
             channels: n_channels,
             sample_rate: n_samples_per_sec,
             bits_per_sample: bits_per_sample
         };
 
+        // The different format tag definitions can be found in mmreg.h that is
+        // part of the Windows SDK. The vast majority are esoteric vendor-
+        // specific formats. We handle only a few. The following values could
+        // be of interest:
+        // 0x0001: WAVE_FORMAT_PCM
+        // 0x0002: WAVE_FORMAT_ADPCM
+        // 0x0003: WAVE_FORMAT_IEEE_FLOAT
+        // 0xfffe: WAVE_FORMAT_EXTENSIBLE
         match format_tag {
-            1 => WavReader::<R>::read_waveformat(chunk_len, spec),
-            // TODO: implement WAVEFORMATEX and WAVEFORMATEXTENSIBLE, maybe
-            // introduce a different error kind for unsupported tag type.
-            _ => Err(Error::FormatError("invalid or unsupported format tag"))
+            0x0001 => WavReader::<R>::read_wave_format_pcm(chunk_len, spec),
+            0xfffe => WavReader::read_wave_format_extensible(reader, chunk_len, spec),
+            _ => Err(Error::Unsupported)
         }
     }
 
-    fn read_waveformat(chunk_len: u32, spec: WavSpec) -> Result<WavSpecEx> {
-       // A WAVEFORMAT fmt block should be 16 bytes long.
-       if chunk_len != 16 {
-           return Err(Error::FormatError("unexpected fmt chunk size"));
-       }
+    fn read_wave_format_pcm(chunk_len: u32, spec: WavSpec) -> Result<WavSpecEx> {
+        // A WAVEFORMAT fmt block should be 16 bytes long. There could be two
+        // extra bytes of `cbSize` set to 0, but I did not encounter such file
+        // in practice. If you do, please contact me.
+        if chunk_len != 16 {
+            return Err(Error::FormatError("unexpected fmt chunk size"));
+        }
 
-       // The bits per sample for a WAVEFORMAT struct is the number of used
-       // bits per sample, as well as the number of bits used to store the
-       // sample, so it must be a multiple of 8.
-       if spec.bits_per_sample % 8 != 0 {
-           return Err(Error::FormatError("bits per sample is not a multiple of 8"));
-       }
+        // For WAVE_FORMAT_PCM, only 8 or 16 bits per sample are valid
+        // according to https://msdn.microsoft.com/en-us/library/ms713497.aspx.
+        if spec.bits_per_sample != 8 && spec.bits_per_sample != 16 {
+            return Err(Error::FormatError("bits per sample is not 8 or 16"));
+        }
 
-       let spec_ex = WavSpecEx {
-           spec: spec,
-           bytes_per_sample: spec.bits_per_sample / 8
-       };
-       Ok(spec_ex)
+        let spec_ex = WavSpecEx {
+            spec: spec,
+            bytes_per_sample: spec.bits_per_sample / 8
+        };
+        Ok(spec_ex)
+    }
+
+    fn read_wave_format_extensible(mut reader: R, chunk_len: u32, spec: WavSpec)
+                                   -> Result<WavSpecEx> {
+        // 16 bytes were read already, there must be two more for the `cbSize`
+        // field, and `cbSize` itself must be at least 22, so the chunk length
+        // must be at least 40.
+        if chunk_len < 40 {
+            return Err(Error::FormatError("unexpected fmt chunk size"));
+        }
+
+        // `cbSize` is the last field of the WAVEFORMATEX struct.
+        let cb_size = try!(reader.read_le_u16());
+
+        // `cbSize` must be at least 22, but in this case we assume that it is
+        // 22, because we would not know how to handle extra data anyway.
+        if cb_size != 22 {
+            return Err(Error::FormatError("unexpected WAVEFORMATEXTENSIBLE size"));
+        }
+
+        // What follows is the rest of the `WAVEFORMATEXTENSIBLE` struct, as
+        // defined at https://msdn.microsoft.com/en-us/library/ms713496.aspx.
+        // ```
+        // typedef struct {
+        //   WAVEFORMATEX  Format;
+        //   union {
+        //     WORD  wValidBitsPerSample;
+        //     WORD  wSamplesPerBlock;
+        //     WORD  wReserved;
+        //   } Samples;
+        //   DWORD   dwChannelMask;
+        //   GUID    SubFormat;
+        // } WAVEFORMATEXTENSIBLE, *PWAVEFORMATEXTENSIBLE;
+        // ```
+        let valid_bits_per_sample = try!(reader.read_le_u16());
+        let _channel_mask = try!(reader.read_le_u32()); // Not used for now.
+        let mut subformat = [0u8; 16];
+        try!(reader.read_into(&mut subformat));
+
+        // Several GUIDS are defined. At the moment, only KSDATAFORMAT_SUBTYPE_PCM
+        // is supported.
+        // TODO: Extract all these constants to a common place.
+        if subformat != [0x01, 0x00, 0x00, 0x00,
+                         0x00, 0x00, 0x10, 0x00,
+                         0x80, 0x00, 0x00, 0xaa,
+                         0x00, 0x38, 0x9b, 0x71] {
+            return Err(Error::Unsupported);
+        }
+
+        let spec_ex = WavSpecEx {
+            spec: WavSpec {
+                bits_per_sample: valid_bits_per_sample,
+                .. spec
+            },
+            bytes_per_sample: spec.bits_per_sample / 8
+        };
+        Ok(spec_ex)
     }
 
     /// Reads chunks until a data chunk is encountered.

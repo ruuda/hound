@@ -115,7 +115,9 @@ pub enum Error {
     /// An IO error occured in the underlying reader or writer.
     IoError(io::Error),
     /// Ill-formed WAVE data was encountered.
-    FormatError(&'static str)
+    FormatError(&'static str),
+    /// The format is not supported.
+    Unsupported
 }
 
 impl fmt::Display for Error {
@@ -126,6 +128,9 @@ impl fmt::Display for Error {
             Error::FormatError(reason) => {
                 try!(formatter.write_str("Ill-formed WAVE file: "));
                 formatter.write_str(reason)
+            },
+            Error::Unsupported => {
+                formatter.write_str("The wave format of the file is not supported.")
             }
         }
     }
@@ -135,14 +140,16 @@ impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
             Error::IoError(ref err) => err.description(),
-            Error::FormatError(reason) => reason
+            Error::FormatError(reason) => reason,
+            Error::Unsupported => "the wave format of the file is not supported"
         }
     }
 
     fn cause(&self) -> Option<&error::Error> {
         match *self {
             Error::IoError(ref err) => Some(err),
-            Error::FormatError(_) => None
+            Error::FormatError(_) => None,
+            Error::Unsupported => None
         }
     }
 }
