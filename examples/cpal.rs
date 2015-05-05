@@ -19,6 +19,7 @@ extern crate hound;
 extern crate cpal;
 
 use std::env;
+use std::thread;
 
 fn main() {
     // Make a WavReader that reads the file provided as program argument.
@@ -30,19 +31,26 @@ fn main() {
     let mut voice = cpal::Voice::new();
 
     let mut append_data = |voice: &mut cpal::Voice| {
+        let mut samples = reader.samples::<i16>();
+        let samples_left = samples.size_hint().0; // TODO: add method to reader?
+
+        if samples_left == 0 { return false; }
+
+        println!("still going, {} samples left", samples_left);
+
         let mut buffer: cpal::Buffer<u16> =
             voice.append_data(spec.channels,
                               cpal::SamplesRate(spec.sample_rate),
-                              1024); // TODO: Do I know the number of samples?
+                              samples_left);
         // Fill the cpal buffer with data from the wav file.
-        for (dest, src) in buffer.iter_mut().zip(reader.samples::<i16>()) {
-            // TODO: Without the cast, there are a lot of artefacts. This
-            // suggests that samples are actually unsigned. We can find out by
-            // computing the mean: if it is around 0i16, then samples are signed.
-            // If it is around 32000u16, then samples are unsigned.
+        for (dest, src) in buffer.iter_mut().zip(&mut samples) {
+            // TODO: There is a bug in cpal that handles signed samples in the
+            // wrong manner, so we cast it to `u16` for now.
             *dest = src.unwrap() as u16;
         }
-        // TODO: check when reader is done, then exit.
+
+        // Probably not done, loop again.
+        true
     };
 
     // The voice must have some data before playing for the first time.
@@ -50,7 +58,9 @@ fn main() {
     voice.play();
 
     // Then we keep providing new data until the end of the audio.
-    loop {
-        append_data(&mut voice); // TODO exit when done
-    }
+    while append_data(&mut voice) { }
+
+    // TODO: Cpal has no function (yet) to wait for playback to complete, so
+    // sleep manually.
+    thread::sleep_ms(1000);
 }
