@@ -515,8 +515,8 @@ where R: io::Read,
 
 #[test]
 fn duration_and_len_agree() {
-    // TODO: add test samples with more channels.
-    let files = &["testsamples/pcmwaveformat-16bit-44100Hz-mono.wav"];
+    let files = &["testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
+                  "testsamples/waveformatex-16bit-44100Hz-stereo.wav"];
 
     for fname in files {
         let reader = WavReader::open(fname).unwrap();
@@ -607,6 +607,24 @@ fn read_wav_wave_format_ex_pcm() {
 
     // The test file has been prepared with these exact four samples.
     assert_eq!(&samples[..], &[2, -3, 5, -7]);
+}
+
+#[test]
+fn read_wav_stereo() {
+    let mut wav_reader = WavReader::open("testsamples/waveformatex-16bit-44100Hz-stereo.wav")
+                                   .ok().expect("failed to read file or header");
+
+    assert_eq!(wav_reader.spec().channels, 2);
+    assert_eq!(wav_reader.spec().sample_rate, 44100);
+    assert_eq!(wav_reader.spec().bits_per_sample, 16);
+
+    let samples: Vec<i16> = wav_reader.samples()
+                                      .map(|r| r.ok().unwrap())
+                                      .collect();
+
+    // The test file has been prepared with these exact eight samples.
+    assert_eq!(&samples[..], &[2, -3, 5, -7, 11, -13, 17, -19]);
+
 }
 
 #[test]
