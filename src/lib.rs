@@ -82,12 +82,12 @@ pub trait Sample {
 }
 
 impl Sample for i16 {
-    fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> io::Result<()> {
+    fn write<W: io::Write>(self, writer: &mut W, _bits: u16) -> io::Result<()> {
         writer.write_le_i16(self)
         // TODO: take bits into account.
     }
 
-    fn read<R: io::Read>(reader: &mut R, bits: u16) -> io::Result<i16> {
+    fn read<R: io::Read>(reader: &mut R, _bits: u16) -> io::Result<i16> {
         reader.read_le_i16()
         // TODO: take bits into account.
     }
