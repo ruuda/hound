@@ -527,29 +527,37 @@ fn duration_and_len_agree() {
     }
 }
 
-/// Tests reading the most basic wav file, one with only a WAVEFORMAT struct.
+/// Tests reading the most basic wav file, one with only a PCMWAVEFORMAT struct.
 #[test]
 fn read_wav_pcm_wave_format_pcm() {
-    // Both test samples have an identical fmt and data chunk, but ffmpeg has
-    // added some garbage chunks in between for the second file.
-    let files = &["testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
-                  "testsamples/pcmwaveformat-16bit-44100Hz-mono-extra.wav"];
+    let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav")
+                                   .ok().expect("failed to read file or header");
 
-    for file in files {
-        let mut wav_reader = WavReader::open(file)
-                                       .ok().expect("failed to read header");
+    assert_eq!(wav_reader.spec().channels, 1);
+    assert_eq!(wav_reader.spec().sample_rate, 44100);
+    assert_eq!(wav_reader.spec().bits_per_sample, 16);
 
-        assert_eq!(wav_reader.spec().channels, 1);
-        assert_eq!(wav_reader.spec().sample_rate, 44100);
-        assert_eq!(wav_reader.spec().bits_per_sample, 16);
+    let samples: Vec<i16> = wav_reader.samples()
+                                      .map(|r| r.ok().unwrap())
+                                      .collect();
 
-        let samples: Vec<i16> = wav_reader.samples()
-                                          .map(|r| r.ok().unwrap())
-                                          .collect();
+    // The test file has been prepared with these exact four samples.
+    assert_eq!(&samples[..], &[2, -3, 5, -7]);
+}
 
-        // The test file has been prepared with these exact four samples.
-        assert_eq!(&samples[..], &[2, -3, 5, -7]);
-    }
+#[test]
+fn read_wav_skips_unknown_chunks() {
+    // The test sample is the same as without the -extra suffix, but ffmpeg has
+    // kindly added some useless chunks in between the fmt and data chunk.
+    let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono-extra.wav")
+                                   .ok().expect("failed to read file or header");
+
+    assert_eq!(wav_reader.spec().channels, 1);
+    assert_eq!(wav_reader.spec().sample_rate, 44100);
+    assert_eq!(wav_reader.spec().bits_per_sample, 16);
+
+    let sample = wav_reader.samples::<i16>().next().unwrap().ok().unwrap();
+    assert_eq!(sample, 2);
 }
 
 #[test]
