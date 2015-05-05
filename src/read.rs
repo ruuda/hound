@@ -508,12 +508,7 @@ fn duration_and_len_agree() {
 /// Tests reading the most basic wav file, one with only a WAVEFORMAT struct.
 #[test]
 fn read_wav_wave_format_pcm() {
-    use std::fs;
-    
-    let file = fs::File::open("testsamples/waveformat-16bit-44100Hz-mono.wav")
-                        .ok().expect("failed to open file");
-    let buf_reader = io::BufReader::new(file);
-    let mut wav_reader = WavReader::new(buf_reader)
+    let mut wav_reader = WavReader::open("testsamples/waveformat-16bit-44100Hz-mono.wav")
                                    .ok().expect("failed to read header");
 
     assert_eq!(wav_reader.spec().channels, 1);
