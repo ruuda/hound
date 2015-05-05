@@ -285,8 +285,6 @@ impl<R> WavReader<R> where R: io::Read {
             return Err(Error::FormatError("unexpected fmt chunk size"));
         }
 
-        // TODO: add test samples with PCMWAVEFORMAT and WAVEFORMATEX.
-
         if is_wave_format_ex {
             // For WAVE_FORMAT_PCM which we are reading, there should be no
             // extra data, so `cbSize` should be 0.
@@ -527,7 +525,7 @@ fn duration_and_len_agree() {
     }
 }
 
-/// Tests reading the most basic wav file, one with only a PCMWAVEFORMAT struct.
+/// Tests reading a wave file with the PCMWAVEFORMAT struct.
 #[test]
 fn read_wav_pcm_wave_format_pcm() {
     let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav")
@@ -586,6 +584,24 @@ fn len_and_size_hint_are_correct() {
         samples.next();
         assert_eq!(samples.size_hint(), (2, Some(2)));
     }
+}
+
+/// Tests reading a wave file with the WAVEFORMATEX struct.
+#[test]
+fn read_wav_wave_format_ex_pcm() {
+    let mut wav_reader = WavReader::open("testsamples/waveformatex-16bit-44100Hz-mono-extra.wav")
+                                   .ok().expect("failed to read file or header");
+
+    assert_eq!(wav_reader.spec().channels, 1);
+    assert_eq!(wav_reader.spec().sample_rate, 44100);
+    assert_eq!(wav_reader.spec().bits_per_sample, 16);
+
+    let samples: Vec<i16> = wav_reader.samples()
+                                      .map(|r| r.ok().unwrap())
+                                      .collect();
+
+    // The test file has been prepared with these exact four samples.
+    assert_eq!(&samples[..], &[2, -3, 5, -7]);
 }
 
 #[test]
