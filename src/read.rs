@@ -561,6 +561,34 @@ fn read_wav_skips_unknown_chunks() {
 }
 
 #[test]
+fn len_and_size_hint_are_correct() {
+    let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav")
+                                   .ok().expect("failed to read file or header");
+
+    assert_eq!(wav_reader.len(), 4);
+
+    {
+        let mut samples = wav_reader.samples::<i16>();
+
+        assert_eq!(samples.size_hint(), (4, Some(4)));
+        samples.next();
+        assert_eq!(samples.size_hint(), (3, Some(3)));
+    }
+
+    // Reading should not affect the initial length.
+    assert_eq!(wav_reader.len(), 4);
+
+    // Creating a new iterator resumes where the previous iterator stopped.
+    {
+        let mut samples = wav_reader.samples::<i16>();
+
+        assert_eq!(samples.size_hint(), (3, Some(3)));
+        samples.next();
+        assert_eq!(samples.size_hint(), (2, Some(2)));
+    }
+}
+
+#[test]
 fn read_wav_wave_format_extensible_pcm() {
     // TODO: add a test sample that uses WAVEFORMATEXTENSIBLE (as produced by
     // Hound itself actually, so this should not be too hard), and verify that
