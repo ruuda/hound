@@ -221,11 +221,19 @@ impl<R> WavReader<R> where R: io::Read {
         //     WORD  cbSize;
         // } WAVEFORMATEX;
         // ```
-        // It appears that in either case, the minimal length of the fmt
-        // section is 16 bytes, meaning that it does include the
-        // `wBitsPerSample` field. (The name is misleading though, because it
-        // is the number of bits used to store a sample, not all of the bits
-        // need to be valid for all versions of the WAVE format.)
+        // There is also PCMWAVEFORMAT as defined at
+        // https://msdn.microsoft.com/en-us/library/dd743663.aspx.
+        // ```
+        // typedef struct {
+        //   WAVEFORMAT wf;
+        //   WORD       wBitsPerSample;
+        // } PCMWAVEFORMAT;
+        // ```
+        // In either case, the minimal length of the fmt section is 16 bytes,
+        // meaning that it does include the `wBitsPerSample` field. (The name
+        // is misleading though, because it is the number of bits used to store
+        // a sample, not all of the bits need to be valid for all versions of
+        // the WAVE format.)
         let format_tag = try!(reader.read_le_u16());
         let n_channels = try!(reader.read_le_u16());
         let n_samples_per_sec = try!(reader.read_le_u32());
@@ -261,24 +269,38 @@ impl<R> WavReader<R> where R: io::Read {
         // 0x0003: WAVE_FORMAT_IEEE_FLOAT
         // 0xfffe: WAVE_FORMAT_EXTENSIBLE
         match format_tag {
-            0x0001 => WavReader::<R>::read_wave_format_pcm(chunk_len, spec),
+            0x0001 => WavReader::read_wave_format_pcm(reader, chunk_len, spec),
             0xfffe => WavReader::read_wave_format_extensible(reader, chunk_len, spec),
             _ => Err(Error::Unsupported)
         }
     }
 
-    fn read_wave_format_pcm(chunk_len: u32, spec: WavSpec) -> Result<WavSpecEx> {
-        // A WAVEFORMAT fmt block should be 16 bytes long. There could be two
-        // extra bytes of `cbSize` set to 0, but I did not encounter such file
-        // in practice. If you do, please contact me.
-        if chunk_len != 16 {
+    fn read_wave_format_pcm(mut reader: R, chunk_len: u32, spec: WavSpec)
+                            -> Result<WavSpecEx> {
+        // When there is a PCMWAVEFORMAT struct, the chunk is 16 bytes long.
+        // The WAVEFORMATEX structs includes two extra bytes, `cbSize`.
+        let is_wave_format_ex = chunk_len == 18;
+
+        if !is_wave_format_ex && chunk_len != 16 {
             return Err(Error::FormatError("unexpected fmt chunk size"));
         }
 
-        // For WAVE_FORMAT_PCM, only 8 or 16 bits per sample are valid
-        // according to https://msdn.microsoft.com/en-us/library/ms713497.aspx.
-        if spec.bits_per_sample != 8 && spec.bits_per_sample != 16 {
-            return Err(Error::FormatError("bits per sample is not 8 or 16"));
+        // TODO: add test samples with PCMWAVEFORMAT and WAVEFORMATEX.
+
+        if is_wave_format_ex {
+            // For WAVE_FORMAT_PCM which we are reading, there should be no
+            // extra data, so `cbSize` should be 0.
+            let cb_size = try!(reader.read_le_u16());
+            if cb_size != 0 {
+                return Err(Error::FormatError("unexpected WAVEFORMATEX size"));
+            }
+
+            // For WAVE_FORMAT_PCM in WAVEFORMATEX, only 8 or 16 bits per
+            // sample are valid according to
+            // https://msdn.microsoft.com/en-us/library/ms713497.aspx.
+            if spec.bits_per_sample != 8 && spec.bits_per_sample != 16 {
+                return Err(Error::FormatError("bits per sample is not 8 or 16"));
+            }
         }
 
         let spec_ex = WavSpecEx {
@@ -496,7 +518,7 @@ where R: io::Read,
 #[test]
 fn duration_and_len_agree() {
     // TODO: add test samples with more channels.
-    let files = &["testsamples/waveformat-16bit-44100Hz-mono.wav"];
+    let files = &["testsamples/pcmwaveformat-16bit-44100Hz-mono.wav"];
 
     for fname in files {
         let reader = WavReader::open(fname).unwrap();
@@ -507,8 +529,8 @@ fn duration_and_len_agree() {
 
 /// Tests reading the most basic wav file, one with only a WAVEFORMAT struct.
 #[test]
-fn read_wav_wave_format_pcm() {
-    let mut wav_reader = WavReader::open("testsamples/waveformat-16bit-44100Hz-mono.wav")
+fn read_wav_pcm_wave_format_pcm() {
+    let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav")
                                    .ok().expect("failed to read header");
 
     assert_eq!(wav_reader.spec().channels, 1);
