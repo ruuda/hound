@@ -93,7 +93,7 @@ impl Sample for i16 {
 }
 
 /// Specifies properties of the audio data.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WavSpec {
     /// The number of channels.
     pub channels: u16,
