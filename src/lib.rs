@@ -165,24 +165,27 @@ pub type Result<T> = result::Result<T, Error>;
 
 #[test]
 fn write_read_is_lossless() {
-    let buffer = Vec::new();
-
+    let mut buffer = io::Cursor::new(Vec::new());
     let write_spec = WavSpec {
         channels: 2,
         sample_rate: 44100,
         bits_per_sample: 16
     };
-    let mut writer = WavWriter::new(io::Cursor::new(&mut buffer), write_spec);
 
-    for s in (-1024_i16 .. 1024) {
-        writer.write_sample(s).unwrap();
+    {
+        let mut writer = WavWriter::new(&mut buffer, write_spec);
+        for s in (-1024_i16 .. 1024) {
+            writer.write_sample(s).unwrap();
+        }
+        writer.finalize().unwrap();
     }
-    writer.finalize().unwrap();
 
-    let mut reader = WavReader::new(io::Cursor::new(&buffer)).unwrap();
-
-    assert_eq!(&write_spec, reader.spec());
-    for (actual, read) in (-1024_i16 .. 1024).zip(reader.samples()) {
-        assert_eq!(actual, read);
+    {
+        buffer.set_position(0);
+        let mut reader = WavReader::new(&mut buffer).unwrap();
+        assert_eq!(&write_spec, reader.spec());
+        for (expected, read) in (-1024_i16 .. 1024).zip(reader.samples()) {
+            assert_eq!(expected, read.unwrap());
+        }
     }
 }
