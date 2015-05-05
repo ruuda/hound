@@ -507,7 +507,7 @@ fn duration_and_len_agree() {
 
 /// Tests reading the most basic wav file, one with only a WAVEFORMAT struct.
 #[test]
-fn read_wav_waveformat() {
+fn read_wav_wave_format_pcm() {
     use std::fs;
     
     let file = fs::File::open("testsamples/waveformat-16bit-44100Hz-mono.wav")
@@ -529,13 +529,7 @@ fn read_wav_waveformat() {
 }
 
 #[test]
-fn read_wav_waveformat_ex() {
-    // TODO: add a test sample that uses WAVEFORMATEX and verify that it can be
-    // read properly.
-}
-
-#[test]
-fn read_wav_waveformat_extensible() {
+fn read_wav_wave_format_extensible_pcm() {
     // TODO: add a test sample that uses WAVEFORMATEXTENSIBLE (as produced by
     // Hound itself actually, so this should not be too hard), and verify that
     // it can be read properly.
