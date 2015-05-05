@@ -545,17 +545,22 @@ fn read_wav_pcm_wave_format_pcm() {
 
 #[test]
 fn read_wav_skips_unknown_chunks() {
-    // The test sample is the same as without the -extra suffix, but ffmpeg has
-    // kindly added some useless chunks in between the fmt and data chunk.
-    let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono-extra.wav")
-                                   .ok().expect("failed to read file or header");
+    // The test samples are the same as without the -extra suffix, but ffmpeg
+    // has kindly added some useless chunks in between the fmt and data chunk.
+    let files = ["testsamples/pcmwaveformat-16bit-44100Hz-mono-extra.wav",
+                 "testsamples/waveformatex-16bit-44100Hz-mono-extra.wav"];
 
-    assert_eq!(wav_reader.spec().channels, 1);
-    assert_eq!(wav_reader.spec().sample_rate, 44100);
-    assert_eq!(wav_reader.spec().bits_per_sample, 16);
+    for file in files.iter() {
+        let mut wav_reader = WavReader::open(file)
+                                       .ok().expect("failed to read file or header");
 
-    let sample = wav_reader.samples::<i16>().next().unwrap().ok().unwrap();
-    assert_eq!(sample, 2);
+        assert_eq!(wav_reader.spec().channels, 1);
+        assert_eq!(wav_reader.spec().sample_rate, 44100);
+        assert_eq!(wav_reader.spec().bits_per_sample, 16);
+
+        let sample = wav_reader.samples::<i16>().next().unwrap().ok().unwrap();
+        assert_eq!(sample, 2);
+    }
 }
 
 #[test]
@@ -589,7 +594,7 @@ fn len_and_size_hint_are_correct() {
 /// Tests reading a wave file with the WAVEFORMATEX struct.
 #[test]
 fn read_wav_wave_format_ex_pcm() {
-    let mut wav_reader = WavReader::open("testsamples/waveformatex-16bit-44100Hz-mono-extra.wav")
+    let mut wav_reader = WavReader::open("testsamples/waveformatex-16bit-44100Hz-mono.wav")
                                    .ok().expect("failed to read file or header");
 
     assert_eq!(wav_reader.spec().channels, 1);
