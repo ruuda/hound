@@ -249,7 +249,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     /// Writes the parts of the WAVE format that require knowing all samples.
     ///
     /// This method must be called after all samples have been written. If it
-    /// is not called, the destructor will finalize the file, but any IO errors
+    /// is not called, the destructor will finalize the file, but any errors
     /// that occur in the process cannot be observed in that manner.
     pub fn finalize(mut self) -> Result<()> {
         self.finalize_internal()
