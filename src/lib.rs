@@ -215,7 +215,7 @@ impl From<io::Error> for Error {
 pub type Result<T> = result::Result<T, Error>;
 
 #[test]
-fn write_read_is_lossless() {
+fn write_read_i16_is_lossless() {
     let mut buffer = io::Cursor::new(Vec::new());
     let write_spec = WavSpec {
         channels: 2,
@@ -236,6 +236,36 @@ fn write_read_is_lossless() {
         let mut reader = WavReader::new(&mut buffer).unwrap();
         assert_eq!(&write_spec, reader.spec());
         for (expected, read) in (-1024_i16 .. 1024).zip(reader.samples()) {
+            assert_eq!(expected, read.unwrap());
+        }
+    }
+}
+
+#[test]
+fn write_read_i8_is_lossless() {
+    let mut buffer = io::Cursor::new(Vec::new());
+    let write_spec = WavSpec {
+        channels: 16,
+        sample_rate: 48000,
+        bits_per_sample: 8
+    };
+
+    // Write `i8` samples.
+    {
+        let mut writer = WavWriter::new(&mut buffer, write_spec);
+        for s in (-128 .. 127 + 1) {
+            // TODO: implement `Sample` for `i8`.
+            writer.write_sample(s as i16).unwrap();
+        }
+        writer.finalize().unwrap();
+    }
+
+    // Then read them into `i16`.
+    {
+        buffer.set_position(0);
+        let mut reader = WavReader::new(&mut buffer).unwrap();
+        assert_eq!(&write_spec, reader.spec());
+        for (expected, read) in (-128_i16 .. 127 + 1).zip(reader.samples()) {
             assert_eq!(expected, read.unwrap());
         }
     }
