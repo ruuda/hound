@@ -81,6 +81,17 @@ pub trait Sample {
     fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<Self>;
 }
 
+/// Converts an unsigned integer in the range 0-255 to a signed one in the range -128-127.
+///
+/// Presumably, the designers of the WAVE format did not like consistency. For
+/// all bit depths except 8, samples are stored as little-endian _signed_
+/// integers. However, an 8-bit sample is instead stored as an _unsigned_
+/// integer. Hound abstracts away this idiosyncrasy by providing only signed
+/// sample types.
+fn signed_from_u8(x: u8) -> i8 {
+    (x as u16 - 128) as i8
+}
+
 impl Sample for i16 {
     fn write<W: io::Write>(self, writer: &mut W, _bits: u16) -> io::Result<()> {
         writer.write_le_i16(self)
@@ -89,7 +100,7 @@ impl Sample for i16 {
 
     fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<i16> {
         match (bytes, bits) {
-            (1, 8) => Ok(try!(reader.read_i8().map(|x| x as i16))),
+            (1, 8) => Ok(try!(reader.read_u8().map(signed_from_u8).map(|x| x as i16))),
             (2, 16) => Ok(try!(reader.read_le_i16())),
             // TODO: add a generic decoder for any bit depth.
             // TODO: differentiate between too wide and unsupported.
