@@ -534,6 +534,7 @@ where R: io::Read,
             // TODO: determine how many bytes to read from reader.bytes_per_sample,
             // not from the Sample type itself.
             let sample = Sample::read(&mut reader.reader,
+                                      reader.bytes_per_sample,
                                       reader.spec.bits_per_sample);
             Some(sample.map_err(Error::from))
         } else {

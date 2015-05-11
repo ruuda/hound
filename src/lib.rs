@@ -78,7 +78,7 @@ pub trait Sample {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> io::Result<()>;
 
     /// Reads the audio sample from the WAVE data chunk.
-    fn read<R: io::Read>(reader: &mut R, bits: u16) -> io::Result<Self>;
+    fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<Self>;
 }
 
 impl Sample for i16 {
@@ -87,9 +87,14 @@ impl Sample for i16 {
         // TODO: take bits into account.
     }
 
-    fn read<R: io::Read>(reader: &mut R, _bits: u16) -> io::Result<i16> {
-        reader.read_le_i16()
-        // TODO: take bits into account.
+    fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<i16> {
+        match (bytes, bits) {
+            (1, 8) => Ok(try!(reader.read_i8().map(|x| x as i16))),
+            (2, 16) => Ok(try!(reader.read_le_i16())),
+            // TODO: add a generic decoder for any bit depth.
+            // TODO: differentiate between too wide and unsupported.
+            _ => Err(Error::TooWide)
+        }
     }
 }
 
