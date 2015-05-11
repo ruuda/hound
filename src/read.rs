@@ -39,11 +39,23 @@ pub trait ReadExt: io::Read {
     /// Reads `n` bytes and returns them in a vector.
     fn read_bytes(&mut self, n: usize) -> io::Result<Vec<u8>>;
 
+    /// Reads a single byte and interprets it as an 8-bit signed integer.
+    fn read_i8(&mut self) -> io::Result<i8>;
+
+    /// Reads a single byte and interprets it as an 8-bit unsigned integer.
+    fn read_u8(&mut self) -> io::Result<u8>;
+
     /// Reads two bytes and interprets them as a little-endian 16-bit signed integer.
     fn read_le_i16(&mut self) -> io::Result<i16>;
 
     /// Reads two bytes and interprets them as a little-endian 16-bit unsigned integer.
     fn read_le_u16(&mut self) -> io::Result<u16>;
+
+    /// Reads three bytes and interprets them as a little-endian 24-bit signed integer.
+    fn read_le_i24(&mut self) -> io::Result<i32>;
+
+    /// Reads three bytes and interprets them as a little-endian 24-bit unsigned integer.
+    fn read_le_u24(&mut self) -> io::Result<u32>;
 
     /// Reads four bytes and interprets them as a little-endian 32-bit unsigned integer.
     fn read_le_u32(&mut self) -> io::Result<u32>;
@@ -73,6 +85,16 @@ impl<R> ReadExt for R where R: io::Read {
         Ok(buf)
     }
 
+    fn read_i8(&mut self) -> io::Result<i8> {
+        self.read_u8().map(|x| x as i8)
+    }
+
+    fn read_u8(&mut self) -> io::Result<u8> {
+        let mut buf = [0u8; 1];
+        try!(self.read_into(&mut buf));
+        Ok(buf[0])
+    }
+
     fn read_le_i16(&mut self) -> io::Result<i16> {
         self.read_le_u16().map(|x| x as i16)
     }
@@ -81,6 +103,16 @@ impl<R> ReadExt for R where R: io::Read {
         let mut buf = [0u8; 2];
         try!(self.read_into(&mut buf));
         Ok((buf[1] as u16) << 8 | (buf[0] as u16))
+    }
+
+    fn read_le_i24(&mut self) -> io::Result<i32> {
+        self.read_le_u24().map(|x| x as i32)
+    }
+
+    fn read_le_u24(&mut self) -> io::Result<u32> {
+        let mut buf = [0u8; 3];
+        try!(self.read_into(&mut buf));
+        Ok((buf[2] as u32) << 16 | (buf[1] as u32) << 8 | (buf[0] as u32))
     }
 
     fn read_le_u32(&mut self) -> io::Result<u32> {
