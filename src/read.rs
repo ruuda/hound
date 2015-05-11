@@ -663,6 +663,21 @@ fn read_wav_stereo() {
 }
 
 #[test]
+fn read_wav_8bit() {
+    let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav")
+                                   .unwrap();
+
+    assert_eq!(wav_reader.spec().bits_per_sample, 8);
+
+    let samples: Vec<i16> = wav_reader.samples()
+                                      .map(|r| r.unwrap())
+                                      .collect();
+
+    // The test file has been prepared with these exact four samples.
+    assert_eq!(&samples[..], &[19, -53, 89, -127]);
+}
+
+#[test]
 fn read_wav_wave_format_extensible_pcm() {
     // TODO: add a test sample that uses WAVEFORMATEXTENSIBLE (as produced by
     // Hound itself actually, so this should not be too hard), and verify that
