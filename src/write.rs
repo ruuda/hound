@@ -17,7 +17,7 @@ use std::fs;
 use std::io;
 use std::io::Write;
 use std::path;
-use super::{Sample, Result, WavSpec};
+use super::{Error, Result, Sample, WavSpec};
 
 /// Extends the functionality of `io::Write` with additional methods.
 ///
@@ -218,7 +218,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     }
 
     /// Performs finalization. After calling this, the writer should be destructed.
-    fn finalize_internal(&mut self) -> io::Result<()> {
+    fn finalize_internal(&mut self) -> Result<()> {
         self.finalized = true;
 
         // Flush remaining samples via the BufWriter.
@@ -235,6 +235,14 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
         try!(writer.seek(io::SeekFrom::Start(64)));
         try!(writer.write_le_u32(self.data_bytes_written));
 
+        // Signal error if the last sample was not finished, but do so after
+        // everything has been written, so that no data is lost, even though
+        // the file is now ill-formed.
+        if (self.data_bytes_written / self.bytes_per_sample as u32)
+            % self.spec.channels as u32 != 0 {
+            return Err(Error::UnfinishedSample);
+        }
+
         Ok(())
     }
 
@@ -244,7 +252,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     /// is not called, the destructor will finalize the file, but any IO errors
     /// that occur in the process cannot be observed in that manner.
     pub fn finalize(mut self) -> Result<()> {
-        Ok(try!(self.finalize_internal()))
+        self.finalize_internal()
     }
 }
 
@@ -270,5 +278,28 @@ impl WavWriter<fs::File> {
            -> io::Result<WavWriter<fs::File>> {
         let file = try!(fs::File::create(filename));
         Ok(WavWriter::new(file, spec))
+    }
+}
+
+#[test]
+fn short_write_should_signal_error() {
+    let mut buffer = io::Cursor::new(Vec::new());
+
+    let write_spec = WavSpec {
+        channels: 17,
+        sample_rate: 48000,
+        bits_per_sample: 8
+    };
+
+    // Deliberately write one sample less than 17 * 5.
+    let mut writer = WavWriter::new(&mut buffer, write_spec);
+    for s in (0 .. 17 * 5 - 1) {
+        writer.write_sample(s).unwrap();
+    }
+    let error = writer.finalize().err().unwrap();
+
+    match error {
+        Error::UnfinishedSample => { },
+        _ => panic!("UnfinishedSample error should have been returned.")
     }
 }

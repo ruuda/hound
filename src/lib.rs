@@ -155,6 +155,8 @@ pub enum Error {
     FormatError(&'static str),
     /// The sample has more bits than the data type of the sample iterator.
     TooWide,
+    /// The number of samples written is not a multiple of the number of channels.
+    UnfinishedSample,
     /// The format is not supported.
     Unsupported
 }
@@ -170,7 +172,10 @@ impl fmt::Display for Error {
             },
             Error::TooWide => {
                 formatter.write_str("The sample has more bits than the data type of the sample iterator.")
-            }
+            },
+            Error::UnfinishedSample => {
+                formatter.write_str("The number of samples written is not a multiple of the number of channels.")
+            },
             Error::Unsupported => {
                 formatter.write_str("The wave format of the file is not supported.")
             }
@@ -184,6 +189,7 @@ impl error::Error for Error {
             Error::IoError(ref err) => err.description(),
             Error::FormatError(reason) => reason,
             Error::TooWide => "the sample has more bits than the data type of the sample iterator",
+            Error::UnfinishedSample => "the number of samples written is not a multiple of the number of channels",
             Error::Unsupported => "the wave format of the file is not supported"
         }
     }
@@ -193,6 +199,7 @@ impl error::Error for Error {
             Error::IoError(ref err) => Some(err),
             Error::FormatError(_) => None,
             Error::TooWide => None,
+            Error::UnfinishedSample => None,
             Error::Unsupported => None
         }
     }
