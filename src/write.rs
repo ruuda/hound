@@ -17,7 +17,7 @@ use std::fs;
 use std::io;
 use std::io::Write;
 use std::path;
-use super::{Sample, WavSpec};
+use super::{Sample, Result, WavSpec};
 
 /// Extends the functionality of `io::Write` with additional methods.
 ///
@@ -197,14 +197,14 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     ///
     /// WAVE interleaves channel data, so the channel that this writes the
     /// sample to depends on previous writes.
-    pub fn write_sample<S: Sample>(&mut self, sample: S) -> io::Result<()> {
+    pub fn write_sample<S: Sample>(&mut self, sample: S) -> Result<()> {
         if !self.wrote_header {
             try!(self.write_header());
             self.wrote_header = true;
         }
 
         // TODO: do we need bits per sample? Is the padding at the obvious side?
-        try!(sample.write(&mut self.writer, self.bytes_per_sample));
+        try!(sample.write(&mut self.writer, self.spec.bits_per_sample));
         self.data_bytes_written += self.bytes_per_sample as u32;
         Ok(())
     }

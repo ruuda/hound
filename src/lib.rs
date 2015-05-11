@@ -75,7 +75,7 @@ pub use write::WavWriter;
 /// A type that can be used to represent audio samples.
 pub trait Sample {
     /// Writes the audio sample to the WAVE data chunk.
-    fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> io::Result<()>;
+    fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()>;
 
     /// Reads the audio sample from the WAVE data chunk.
     fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<Self>;
@@ -93,9 +93,12 @@ fn signed_from_u8(x: u8) -> i8 {
 }
 
 impl Sample for i16 {
-    fn write<W: io::Write>(self, writer: &mut W, _bits: u16) -> io::Result<()> {
-        writer.write_le_i16(self)
-        // TODO: take bits into account.
+    fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
+        match bits {
+            8 => Ok(()), // TODO
+            16 => Ok(try!(writer.write_le_i16(self))),
+            _ => Err(Error::Unsupported)
+        }
     }
 
     fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<i16> {
