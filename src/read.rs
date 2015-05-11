@@ -564,14 +564,14 @@ fn duration_and_len_agree() {
 #[test]
 fn read_wav_pcm_wave_format_pcm() {
     let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav")
-                                   .ok().expect("failed to read file or header");
+                                   .unwrap();
 
     assert_eq!(wav_reader.spec().channels, 1);
     assert_eq!(wav_reader.spec().sample_rate, 44100);
     assert_eq!(wav_reader.spec().bits_per_sample, 16);
 
     let samples: Vec<i16> = wav_reader.samples()
-                                      .map(|r| r.ok().unwrap())
+                                      .map(|r| r.unwrap())
                                       .collect();
 
     // The test file has been prepared with these exact four samples.
@@ -587,13 +587,13 @@ fn read_wav_skips_unknown_chunks() {
 
     for file in files.iter() {
         let mut wav_reader = WavReader::open(file)
-                                       .ok().expect("failed to read file or header");
+                                       .unwrap();
 
         assert_eq!(wav_reader.spec().channels, 1);
         assert_eq!(wav_reader.spec().sample_rate, 44100);
         assert_eq!(wav_reader.spec().bits_per_sample, 16);
 
-        let sample = wav_reader.samples::<i16>().next().unwrap().ok().unwrap();
+        let sample = wav_reader.samples::<i16>().next().unwrap().unwrap();
         assert_eq!(sample, 2);
     }
 }
@@ -601,7 +601,7 @@ fn read_wav_skips_unknown_chunks() {
 #[test]
 fn len_and_size_hint_are_correct() {
     let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav")
-                                   .ok().expect("failed to read file or header");
+                                   .unwrap();
 
     assert_eq!(wav_reader.len(), 4);
 
@@ -630,14 +630,14 @@ fn len_and_size_hint_are_correct() {
 #[test]
 fn read_wav_wave_format_ex_pcm() {
     let mut wav_reader = WavReader::open("testsamples/waveformatex-16bit-44100Hz-mono.wav")
-                                   .ok().expect("failed to read file or header");
+                                   .unwrap();
 
     assert_eq!(wav_reader.spec().channels, 1);
     assert_eq!(wav_reader.spec().sample_rate, 44100);
     assert_eq!(wav_reader.spec().bits_per_sample, 16);
 
     let samples: Vec<i16> = wav_reader.samples()
-                                      .map(|r| r.ok().unwrap())
+                                      .map(|r| r.unwrap())
                                       .collect();
 
     // The test file has been prepared with these exact four samples.
@@ -647,14 +647,14 @@ fn read_wav_wave_format_ex_pcm() {
 #[test]
 fn read_wav_stereo() {
     let mut wav_reader = WavReader::open("testsamples/waveformatex-16bit-44100Hz-stereo.wav")
-                                   .ok().expect("failed to read file or header");
+                                   .unwrap();
 
     assert_eq!(wav_reader.spec().channels, 2);
     assert_eq!(wav_reader.spec().sample_rate, 44100);
     assert_eq!(wav_reader.spec().bits_per_sample, 16);
 
     let samples: Vec<i16> = wav_reader.samples()
-                                      .map(|r| r.ok().unwrap())
+                                      .map(|r| r.unwrap())
                                       .collect();
 
     // The test file has been prepared with these exact eight samples.
