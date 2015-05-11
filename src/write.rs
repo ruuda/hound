@@ -235,8 +235,8 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     /// This method must be called after all samples have been written. If it
     /// is not called, the destructor will finalize the file, but any IO errors
     /// that occur in the process cannot be observed in that manner.
-    pub fn finalize(mut self) -> io::Result<()> {
-        self.finalize_internal()
+    pub fn finalize(mut self) -> Result<()> {
+        Ok(try!(self.finalize_internal()))
     }
 }
 
