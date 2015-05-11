@@ -89,13 +89,30 @@ pub trait Sample {
 /// integer. Hound abstracts away this idiosyncrasy by providing only signed
 /// sample types.
 fn signed_from_u8(x: u8) -> i8 {
-    (x as u16 - 128) as i8
+    (x as i16 - 128) as i8
+}
+
+/// Converts a signed integer in the range -128-127 to an unsigned one in the range 0-255.
+fn u8_from_signed(x: i8) -> u8 {
+    (x as i16 + 128) as u8
+}
+
+#[test]
+fn u8_sign_conversion_is_bijective() {
+    for x in (0 .. 255) {
+        assert_eq!(x, u8_from_signed(signed_from_u8(x)));
+    }
+    for x in (-128 .. 127) {
+        assert_eq!(x, signed_from_u8(u8_from_signed(x)));
+    }
 }
 
 impl Sample for i16 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
         match bits {
-            8 => Ok(()), // TODO
+            // TODO: do a bounds check on the downcast, or disallow writing
+            // wider types than the bits per sample in the spec beforehand.
+            8 => Ok(try!(writer.write_u8(u8_from_signed(self as i8)))),
             16 => Ok(try!(writer.write_le_i16(self))),
             _ => Err(Error::Unsupported)
         }

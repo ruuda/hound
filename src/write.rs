@@ -23,6 +23,9 @@ use super::{Sample, Result, WavSpec};
 ///
 /// The methods may be used on any type that implements `io::Write`.
 pub trait WriteExt: io::Write {
+    /// Writes an unsigned 8-bit integer.
+    fn write_u8(&mut self, x: u8) -> io::Result<()>;
+
     /// Writes a signed 16-bit integer in little endian format.
     fn write_le_i16(&mut self, x: i16) -> io::Result<()>;
 
@@ -34,6 +37,11 @@ pub trait WriteExt: io::Write {
 }
 
 impl<W> WriteExt for W where W: io::Write {
+    fn write_u8(&mut self, x: u8) -> io::Result<()> {
+        let buf = [x];
+        self.write_all(&buf)
+    }
+
     fn write_le_i16(&mut self, x: i16) -> io::Result<()> {
         self.write_le_u16(x as u16)
     }
