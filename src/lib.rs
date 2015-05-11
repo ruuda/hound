@@ -117,6 +117,8 @@ pub enum Error {
     IoError(io::Error),
     /// Ill-formed WAVE data was encountered.
     FormatError(&'static str),
+    /// The sample has more bits than the data type of the sample iterator.
+    TooWide,
     /// The format is not supported.
     Unsupported
 }
@@ -130,6 +132,9 @@ impl fmt::Display for Error {
                 try!(formatter.write_str("Ill-formed WAVE file: "));
                 formatter.write_str(reason)
             },
+            Error::TooWide => {
+                formatter.write_str("The sample has more bits than the data type of the sample iterator.")
+            }
             Error::Unsupported => {
                 formatter.write_str("The wave format of the file is not supported.")
             }
@@ -142,6 +147,7 @@ impl error::Error for Error {
         match *self {
             Error::IoError(ref err) => err.description(),
             Error::FormatError(reason) => reason,
+            Error::TooWide => "the sample has more bits than the data type of the sample iterator",
             Error::Unsupported => "the wave format of the file is not supported"
         }
     }
@@ -150,6 +156,7 @@ impl error::Error for Error {
         match *self {
             Error::IoError(ref err) => Some(err),
             Error::FormatError(_) => None,
+            Error::TooWide => None,
             Error::Unsupported => None
         }
     }
