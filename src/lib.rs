@@ -135,6 +135,8 @@ impl Sample for i16 {
             // wider types than the bits per sample in the spec beforehand.
             8 => Ok(try!(writer.write_u8(u8_from_signed(self as i8)))),
             16 => Ok(try!(writer.write_le_i16(self))),
+            24 => Ok(try!(writer.write_le_i24(self as i32))),
+            32 => Ok(try!(writer.write_le_i32(self as i32))),
             _ => Err(Error::Unsupported)
         }
     }
