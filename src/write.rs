@@ -32,6 +32,19 @@ pub trait WriteExt: io::Write {
     /// Writes an unsigned 16-bit integer in little endian format.
     fn write_le_u16(&mut self, x: u16) -> io::Result<()>;
 
+    /// Writes a signed 24-bit integer in little endian format.
+    ///
+    /// The most significant byte of the `i32` is ignored.
+    fn write_le_i24(&mut self, x: i32) -> io::Result<()>;
+
+    /// Writes an unsigned 24-bit integer in little endian format.
+    ///
+    /// The most significant byte of the `u32` is ignored.
+    fn write_le_u24(&mut self, x: u32) -> io::Result<()>;
+
+    /// Writes a signed 32-bit integer in little endian format.
+    fn write_le_i32(&mut self, x: i32) -> io::Result<()>;
+
     /// Writes an unsigned 32-bit integer in little endian format.
     fn write_le_u32(&mut self, x: u32) -> io::Result<()>;
 }
@@ -51,6 +64,22 @@ impl<W> WriteExt for W where W: io::Write {
         buf[0] = (x & 0xff) as u8;
         buf[1] = (x >> 8) as u8;
         self.write_all(&buf)
+    }
+
+    fn write_le_i24(&mut self, x: i32) -> io::Result<()> {
+        self.write_le_u24(x as u32)
+    }
+
+    fn write_le_u24(&mut self, x: u32) -> io::Result<()> {
+        let mut buf = [0u8; 3];
+        buf[0] = ((x >> 00) & 0xff) as u8;
+        buf[1] = ((x >> 08) & 0xff) as u8;
+        buf[2] = ((x >> 16) & 0xff) as u8;
+        self.write_all(&buf)
+    }
+
+    fn write_le_i32(&mut self, x: i32) -> io::Result<()> {
+        self.write_le_u32(x as u32)
     }
 
     fn write_le_u32(&mut self, x: u32) -> io::Result<()> {
