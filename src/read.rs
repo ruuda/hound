@@ -13,8 +13,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#![allow(dead_code)] // TODO: Take bytes_per_sample field into account.
-
 use std::fs;
 use std::io;
 use std::marker;
@@ -531,8 +529,6 @@ where R: io::Read,
         let reader = &mut self.reader;
         if reader.samples_read < reader.num_samples {
             reader.samples_read += 1;
-            // TODO: determine how many bytes to read from reader.bytes_per_sample,
-            // not from the Sample type itself.
             let sample = Sample::read(&mut reader.reader,
                                       reader.bytes_per_sample,
                                       reader.spec.bits_per_sample);
