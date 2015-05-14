@@ -50,10 +50,17 @@ pub trait ReadExt: io::Read {
     fn read_le_u16(&mut self) -> io::Result<u16>;
 
     /// Reads three bytes and interprets them as a little-endian 24-bit signed integer.
+    ///
+    /// The sign bit will be extended into the most significant byte.
     fn read_le_i24(&mut self) -> io::Result<i32>;
 
     /// Reads three bytes and interprets them as a little-endian 24-bit unsigned integer.
+    ///
+    /// The most significant byte will be 0.
     fn read_le_u24(&mut self) -> io::Result<u32>;
+
+    /// Reads four bytes and interprets them as a little-endian 32-bit signed integer.
+    fn read_le_i32(&mut self) -> io::Result<i32>;
 
     /// Reads four bytes and interprets them as a little-endian 32-bit unsigned integer.
     fn read_le_u32(&mut self) -> io::Result<u32>;
@@ -104,13 +111,25 @@ impl<R> ReadExt for R where R: io::Read {
     }
 
     fn read_le_i24(&mut self) -> io::Result<i32> {
-        self.read_le_u24().map(|x| x as i32)
+        self.read_le_u24().map(|x|
+            // Test the sign bit, if it is set, extend the sign bit into the
+            // most significant byte.
+            if x & (1 << 23) == 0 {
+                x as i32
+            } else {
+                (x | 0xff_00_00_00) as i32
+            }
+        )
     }
 
     fn read_le_u24(&mut self) -> io::Result<u32> {
         let mut buf = [0u8; 3];
         try!(self.read_into(&mut buf));
         Ok((buf[2] as u32) << 16 | (buf[1] as u32) << 8 | (buf[0] as u32))
+    }
+
+    fn read_le_i32(&mut self) -> io::Result<i32> {
+        self.read_le_u32().map(|x| x as i32)
     }
 
     fn read_le_u32(&mut self) -> io::Result<u32> {
