@@ -8,5 +8,5 @@ install:
   - sudo apt-get install libasound2-dev
 
 rust:
-  - 1.0.0-beta.4
+  - 1.0.0-beta.5
   - nightly
