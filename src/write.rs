@@ -323,7 +323,7 @@ fn short_write_should_signal_error() {
     // Deliberately write one sample less than 17 * 5.
     let mut writer = WavWriter::new(&mut buffer, write_spec);
     for s in (0 .. 17 * 5 - 1) {
-        writer.write_sample(s).unwrap();
+        writer.write_sample(s as i16).unwrap();
     }
     let error = writer.finalize().err().unwrap();
 

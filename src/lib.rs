@@ -276,9 +276,9 @@ fn write_read_i8_is_lossless() {
     // Write `i8` samples.
     {
         let mut writer = WavWriter::new(&mut buffer, write_spec);
-        for s in (-128 .. 127 + 1) {
-            // TODO: implement `Sample` for `i8`.
-            writer.write_sample(s as i16).unwrap();
+        // Iterate over i16 because we cannot specify the upper bound otherwise.
+        for s in (-128_i16 .. 127 + 1) {
+            writer.write_sample(s as i8).unwrap();
         }
         writer.finalize().unwrap();
     }
