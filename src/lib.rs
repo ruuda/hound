@@ -107,6 +107,27 @@ fn u8_sign_conversion_is_bijective() {
     }
 }
 
+impl Sample for i8 {
+    fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
+        match bits {
+            8 => Ok(try!(writer.write_u8(u8_from_signed(self as i8)))),
+            16 => Ok(try!(writer.write_le_i16(self as i16))),
+            24 => Ok(try!(writer.write_le_i24(self as i32))),
+            32 => Ok(try!(writer.write_le_i32(self as i32))),
+            _ => Err(Error::Unsupported)
+        }
+    }
+
+    fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<i8> {
+        match (bytes, bits) {
+            (1, 8) => Ok(try!(reader.read_u8().map(signed_from_u8))),
+            // TODO: add a genric decoder for any bit depth.
+            // TODO: differentiate between too wide and unsupported.
+            _ => Err(Error::TooWide)
+        }
+    }
+}
+
 impl Sample for i16 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
         match bits {
