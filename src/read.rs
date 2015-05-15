@@ -692,9 +692,20 @@ fn read_wav_8bit() {
     assert_eq!(&samples[..], &[19, -53, 89, -127]);
 }
 
+/// This test sample tests both reading the WAVEFORMATEXTENSIBLE header, and 24-bit samples.
 #[test]
-fn read_wav_wave_format_extensible_pcm() {
-    // TODO: add a test sample that uses WAVEFORMATEXTENSIBLE (as produced by
-    // Hound itself actually, so this should not be too hard), and verify that
-    // it can be read properly.
+fn read_wav_wave_format_extensible_pcm_24bit() {
+    let mut wav_reader = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
+                                   .unwrap();
+
+    assert_eq!(wav_reader.spec().channels, 1);
+    assert_eq!(wav_reader.spec().sample_rate, 192_000);
+    assert_eq!(wav_reader.spec().bits_per_sample, 24);
+
+    let samples: Vec<i32> = wav_reader.samples()
+                                      .map(|r| r.unwrap())
+                                      .collect();
+
+    // The test file has been prepared with these exact four samples.
+    assert_eq!(&samples[..], &[-17, 4_194_319, -6_291_437, 8_355_817]);
 }
