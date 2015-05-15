@@ -9,6 +9,7 @@ license = "GPL-3.0"
 readme = "readme.md"
 homepage = "https://github.com/ruud-v-a/hound"
 repository = "https://github.com/ruud-v-a/hound"
+documentation = "https://ruud-v-a.github.io/hound/doc/v0.3.0/hound/"
 
 [dev-dependencies]
 cpal = "0.0.20"
