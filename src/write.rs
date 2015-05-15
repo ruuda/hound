@@ -332,3 +332,37 @@ fn short_write_should_signal_error() {
         _ => panic!("UnfinishedSample error should have been returned.")
     }
 }
+
+#[test]
+fn wide_write_should_signal_error() {
+    let mut buffer = io::Cursor::new(Vec::new());
+
+    let spec8 = WavSpec {
+        channels: 1,
+        sample_rate: 44100,
+        bits_per_sample: 8
+    };
+    {
+        let mut writer = WavWriter::new(&mut buffer, spec8);
+        assert!(writer.write_sample(127_i8).is_ok());
+        assert!(writer.write_sample(127_i16).is_ok());
+        assert!(writer.write_sample(127_i32).is_ok());
+        assert!(writer.write_sample(128_i16).is_err());
+        assert!(writer.write_sample(128_i32).is_err());
+    }
+
+    let spec16 = WavSpec { bits_per_sample: 16, .. spec8 };
+    {
+        let mut writer = WavWriter::new(&mut buffer, spec16);
+        assert!(writer.write_sample(32767_i16).is_ok());
+        assert!(writer.write_sample(32767_i32).is_ok());
+        assert!(writer.write_sample(32768_i32).is_err());
+    }
+
+    let spec24 = WavSpec { bits_per_sample: 24, .. spec8 };
+    {
+        let mut writer = WavWriter::new(&mut buffer, spec24);
+        assert!(writer.write_sample(8_388_607_i32).is_ok());
+        assert!(writer.write_sample(8_388_608_i32).is_err());
+    }
+}
