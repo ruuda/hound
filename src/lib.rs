@@ -107,10 +107,63 @@ fn u8_sign_conversion_is_bijective() {
     }
 }
 
+/// Tries to cast the sample to an 8-bit signed integer, returning an error on overflow.
+fn narrow_to_i8(x: i32) -> Result<i8> {
+    use std::i8;
+    if x < i8::MIN as i32 || x > i8::MAX as i32 {
+        Err(Error::TooWide)
+    } else {
+        Ok(x as i8)
+    }
+}
+
+#[test]
+fn verify_narrow_to_i8() {
+    assert!(narrow_to_i8(127).is_ok());
+    assert!(narrow_to_i8(128).is_err());
+    assert!(narrow_to_i8(-128).is_ok());
+    assert!(narrow_to_i8(-129).is_err());
+}
+
+/// Tries to cast the sample to a 16-bit signed integer, returning an error on overflow.
+fn narrow_to_i16(x: i32) -> Result<i16> {
+    use std::i16;
+    if x < i16::MIN as i32 || x > i16::MAX as i32 {
+        Err(Error::TooWide)
+    } else {
+        Ok(x as i16)
+    }
+}
+
+#[test]
+fn verify_narrow_to_i16() {
+    assert!(narrow_to_i16(32767).is_ok());
+    assert!(narrow_to_i16(32768).is_err());
+    assert!(narrow_to_i16(-32768).is_ok());
+    assert!(narrow_to_i16(-32769).is_err());
+}
+
+/// Tries to cast the sample to a 24-bit signed integer, returning an error on overflow.
+fn narrow_to_i24(x: i32) -> Result<i32> {
+    if x < -(1 << 23) || x > (1 << 23) - 1 {
+        Err(Error::TooWide)
+    } else {
+        Ok(x)
+    }
+}
+
+#[test]
+fn verify_narrow_to_i24() {
+    assert!(narrow_to_i24(8_388_607).is_ok());
+    assert!(narrow_to_i24(8_388_608).is_err());
+    assert!(narrow_to_i24(-8_388_608).is_ok());
+    assert!(narrow_to_i24(-8_388_609).is_err());
+}
+
 impl Sample for i8 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
         match bits {
-            8 => Ok(try!(writer.write_u8(u8_from_signed(self as i8)))),
+            8 => Ok(try!(writer.write_u8(u8_from_signed(self)))),
             16 => Ok(try!(writer.write_le_i16(self as i16))),
             24 => Ok(try!(writer.write_le_i24(self as i32))),
             32 => Ok(try!(writer.write_le_i32(self as i32))),
@@ -131,9 +184,7 @@ impl Sample for i8 {
 impl Sample for i16 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
         match bits {
-            // TODO: do a bounds check on the downcast, or disallow writing
-            // wider types than the bits per sample in the spec beforehand.
-            8 => Ok(try!(writer.write_u8(u8_from_signed(self as i8)))),
+            8 => Ok(try!(writer.write_u8(u8_from_signed(try!(narrow_to_i8(self as i32)))))),
             16 => Ok(try!(writer.write_le_i16(self))),
             24 => Ok(try!(writer.write_le_i24(self as i32))),
             32 => Ok(try!(writer.write_le_i32(self as i32))),
@@ -157,9 +208,9 @@ impl Sample for i32 {
         match bits {
             // TODO: do a bounds check on the downcast, or disallow writing
             // wider types than the bits per sample in the spec beforehand.
-            8 => Ok(try!(writer.write_u8(u8_from_signed(self as i8)))),
-            16 => Ok(try!(writer.write_le_i16(self as i16))),
-            24 => Ok(try!(writer.write_le_i24(self))),
+            8 => Ok(try!(writer.write_u8(u8_from_signed(try!(narrow_to_i8(self)))))),
+            16 => Ok(try!(writer.write_le_i16(try!(narrow_to_i16(self))))),
+            24 => Ok(try!(writer.write_le_i24(try!(narrow_to_i24(self))))),
             32 => Ok(try!(writer.write_le_i32(self))),
             _ => Err(Error::Unsupported)
         }
@@ -202,7 +253,12 @@ pub enum Error {
     IoError(io::Error),
     /// Ill-formed WAVE data was encountered.
     FormatError(&'static str),
-    /// The sample has more bits than the data type of the sample iterator.
+    /// The sample has more bits than the destination type.
+    ///
+    /// When iterating using the `samples` iterator, this means that the
+    /// destination type (produced by the iterator) is not wide enough to hold
+    /// the sample. When writing, this means that the sample cannot be written,
+    /// because it requires more bits than the bits per sample specified.
     TooWide,
     /// The number of samples written is not a multiple of the number of channels.
     UnfinishedSample,
@@ -220,7 +276,7 @@ impl fmt::Display for Error {
                 formatter.write_str(reason)
             },
             Error::TooWide => {
-                formatter.write_str("The sample has more bits than the data type of the sample iterator.")
+                formatter.write_str("The sample has more bits than the destination type.")
             },
             Error::UnfinishedSample => {
                 formatter.write_str("The number of samples written is not a multiple of the number of channels.")
@@ -237,7 +293,7 @@ impl error::Error for Error {
         match *self {
             Error::IoError(ref err) => err.description(),
             Error::FormatError(reason) => reason,
-            Error::TooWide => "the sample has more bits than the data type of the sample iterator",
+            Error::TooWide => "the sample has more bits than the destination type",
             Error::UnfinishedSample => "the number of samples written is not a multiple of the number of channels",
             Error::Unsupported => "the wave format of the file is not supported"
         }
