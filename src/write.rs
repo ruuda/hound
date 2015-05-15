@@ -240,7 +240,6 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
             self.wrote_header = true;
         }
 
-        // TODO: do we need bits per sample? Is the padding at the obvious side?
         try!(sample.write(&mut self.writer, self.spec.bits_per_sample));
         self.data_bytes_written += self.bytes_per_sample as u32;
         Ok(())

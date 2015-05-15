@@ -206,8 +206,6 @@ impl Sample for i16 {
 impl Sample for i32 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
         match bits {
-            // TODO: do a bounds check on the downcast, or disallow writing
-            // wider types than the bits per sample in the spec beforehand.
             8 => Ok(try!(writer.write_u8(u8_from_signed(try!(narrow_to_i8(self)))))),
             16 => Ok(try!(writer.write_le_i16(try!(narrow_to_i16(self))))),
             24 => Ok(try!(writer.write_le_i24(try!(narrow_to_i24(self))))),
