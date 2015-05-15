@@ -174,9 +174,9 @@ impl Sample for i8 {
     fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<i8> {
         match (bytes, bits) {
             (1, 8) => Ok(try!(reader.read_u8().map(signed_from_u8))),
+            (n, _) if n > 1 => Err(Error::TooWide),
             // TODO: add a genric decoder for any bit depth.
-            // TODO: differentiate between too wide and unsupported.
-            _ => Err(Error::TooWide)
+            _ => Err(Error::Unsupported)
         }
     }
 }
@@ -196,9 +196,9 @@ impl Sample for i16 {
         match (bytes, bits) {
             (1, 8) => Ok(try!(reader.read_u8().map(signed_from_u8).map(|x| x as i16))),
             (2, 16) => Ok(try!(reader.read_le_i16())),
+            (n, _) if n > 2 => Err(Error::TooWide),
             // TODO: add a generic decoder for any bit depth.
-            // TODO: differentiate between too wide and unsupported.
-            _ => Err(Error::TooWide)
+            _ => Err(Error::Unsupported)
         }
     }
 }
@@ -220,9 +220,9 @@ impl Sample for i32 {
             (2, 16) => Ok(try!(reader.read_le_i16().map(|x| x as i32))),
             (3, 24) => Ok(try!(reader.read_le_i24())),
             (4, 32) => Ok(try!(reader.read_le_i32())),
+            (n, _) if n > 4 => Err(Error::TooWide),
             // TODO: add a generic decoder for any bit depth.
-            // TODO: differentiate between too wide and unsupported.
-            _ => Err(Error::TooWide)
+            _ => Err(Error::Unsupported)
         }
     }
 }
