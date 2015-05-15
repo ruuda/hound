@@ -709,3 +709,16 @@ fn read_wav_wave_format_extensible_pcm_24bit() {
     // The test file has been prepared with these exact four samples.
     assert_eq!(&samples[..], &[-17, 4_194_319, -6_291_437, 8_355_817]);
 }
+
+#[test]
+fn wide_read_should_signal_error() {
+    let mut reader24 = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
+                                 .unwrap();
+
+    // Even though we know the first value is 17, and it should fit in an `i8`,
+    // a general 24-bit sample will not fit in an `i8`, so this should fail.
+    // 16-bit is still not wide enough, but 32-bit should do the trick.
+    assert!(reader24.samples::<i8>().next().unwrap().is_err());
+    assert!(reader24.samples::<i16>().next().unwrap().is_err());
+    assert!(reader24.samples::<i32>().next().unwrap().is_ok());
+}
