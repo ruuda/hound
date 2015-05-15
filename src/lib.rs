@@ -152,6 +152,32 @@ impl Sample for i16 {
     }
 }
 
+impl Sample for i32 {
+    fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
+        match bits {
+            // TODO: do a bounds check on the downcast, or disallow writing
+            // wider types than the bits per sample in the spec beforehand.
+            8 => Ok(try!(writer.write_u8(u8_from_signed(self as i8)))),
+            16 => Ok(try!(writer.write_le_i16(self as i16))),
+            24 => Ok(try!(writer.write_le_i24(self))),
+            32 => Ok(try!(writer.write_le_i32(self))),
+            _ => Err(Error::Unsupported)
+        }
+    }
+
+    fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<i32> {
+        match (bytes, bits) {
+            (1, 8) => Ok(try!(reader.read_u8().map(signed_from_u8).map(|x| x as i32))),
+            (2, 16) => Ok(try!(reader.read_le_i16().map(|x| x as i32))),
+            (3, 24) => Ok(try!(reader.read_le_i24())),
+            (4, 32) => Ok(try!(reader.read_le_i32())),
+            // TODO: add a generic decoder for any bit depth.
+            // TODO: differentiate between too wide and unsupported.
+            _ => Err(Error::TooWide)
+        }
+    }
+}
+
 /// Specifies properties of the audio data.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WavSpec {
@@ -289,6 +315,37 @@ fn write_read_i8_is_lossless() {
         let mut reader = WavReader::new(&mut buffer).unwrap();
         assert_eq!(&write_spec, reader.spec());
         for (expected, read) in (-128_i16 .. 127 + 1).zip(reader.samples()) {
+            assert_eq!(expected, read.unwrap());
+        }
+    }
+}
+
+#[test]
+fn write_read_i24_is_lossless() {
+    let mut buffer = io::Cursor::new(Vec::new());
+    let write_spec = WavSpec {
+        channels: 16,
+        sample_rate: 96000,
+        bits_per_sample: 24
+    };
+
+    // Write `i32` samples, but with at most 24 bits per sample.
+    {
+        let mut writer = WavWriter::new(&mut buffer, write_spec);
+        for s in (-128_i32 .. 127 + 1) {
+            writer.write_sample(s * 256 * 256).unwrap();
+        }
+        writer.finalize().unwrap();
+    }
+
+    // Then read them into `i32`. This should extend the sign in the correct
+    // manner.
+    {
+        buffer.set_position(0);
+        let mut reader = WavReader::new(&mut buffer).unwrap();
+        assert_eq!(&write_spec, reader.spec());
+        for (expected, read) in (-128_i32 .. 127 + 1).map(|x| x * 256 * 256)
+                                                     .zip(reader.samples()) {
             assert_eq!(expected, read.unwrap());
         }
     }
