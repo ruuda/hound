@@ -36,8 +36,6 @@ fn main() {
 
         if samples_left == 0 { return false; }
 
-        println!("still going, {} samples left", samples_left);
-
         let mut buffer: cpal::Buffer<u16> =
             voice.append_data(spec.channels,
                               cpal::SamplesRate(spec.sample_rate),
