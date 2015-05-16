@@ -1,7 +1,7 @@
 [package]
 
 name = "hound"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Ruud van Asseldonk <dev@veniogames.com>"]
 description = "A WAV encoding and decoding library"
 keywords = ["wav", "wave", "audio", "codec"]
@@ -9,7 +9,7 @@ license = "GPL-3.0"
 readme = "readme.md"
 homepage = "https://github.com/ruud-v-a/hound"
 repository = "https://github.com/ruud-v-a/hound"
-documentation = "https://ruud-v-a.github.io/hound/doc/v0.3.0/hound/"
+documentation = "https://ruud-v-a.github.io/hound/doc/v0.4.0/hound/"
 
 [dev-dependencies]
 cpal = "0.0.20"
