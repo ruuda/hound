@@ -566,7 +566,8 @@ where R: io::Read,
 #[test]
 fn duration_and_len_agree() {
     let files = &["testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
-                  "testsamples/waveformatex-16bit-44100Hz-stereo.wav"];
+                  "testsamples/waveformatex-16bit-44100Hz-stereo.wav",
+                  "testsamples/waveformatextensible-32bit-48kHz-stereo.wav"];
 
     for fname in files {
         let reader = WavReader::open(fname).unwrap();
@@ -711,6 +712,21 @@ fn read_wav_wave_format_extensible_pcm_24bit() {
 }
 
 #[test]
+fn read_wav_32bit() {
+    let mut wav_reader = WavReader::open("testsamples/waveformatextensible-32bit-48kHz-stereo.wav")
+                                   .unwrap();
+
+    assert_eq!(wav_reader.spec().bits_per_sample, 32);
+
+    let samples: Vec<i32> = wav_reader.samples()
+                                      .map(|r| r.unwrap())
+                                      .collect();
+
+    // The test file has been prepared with these exact four samples.
+    assert_eq!(&samples[..], &[19, -229_373, 33_587_161, -2_147_483_497]);
+}
+
+#[test]
 fn wide_read_should_signal_error() {
     let mut reader24 = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
                                  .unwrap();
@@ -721,4 +737,12 @@ fn wide_read_should_signal_error() {
     assert!(reader24.samples::<i8>().next().unwrap().is_err());
     assert!(reader24.samples::<i16>().next().unwrap().is_err());
     assert!(reader24.samples::<i32>().next().unwrap().is_ok());
+
+    let mut reader32 = WavReader::open("testsamples/waveformatextensible-32bit-48kHz-stereo.wav")
+                                 .unwrap();
+
+    // In general, 32-bit samples will not fit in anything but an `i32`.
+    assert!(reader32.samples::<i8>().next().unwrap().is_err());
+    assert!(reader32.samples::<i16>().next().unwrap().is_err());
+    assert!(reader32.samples::<i32>().next().unwrap().is_ok());
 }
