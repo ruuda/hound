@@ -170,7 +170,9 @@ struct WavSpecEx {
 ///
 /// A `WavReader` is a streaming reader. It reads data from the underlying
 /// reader on demand, and it reads no more than strictly necessary. No internal
-/// buffering is performed on the underlying reader.
+/// buffering is performed on the underlying reader, but this can easily be
+/// added by wrapping the reader in an `io::BufReader`. The `open` constructor
+/// takes care of this for you.
 pub struct WavReader<R> {
     /// Specification of the file as found in the fmt chunk.
     spec: WavSpec,
@@ -193,6 +195,9 @@ pub struct WavReader<R> {
 }
 
 /// An iterator that yields samples of type `S` read from a `WavReader`.
+///
+/// The type `S` must have at least as many bits as the bits per sample of the
+/// file, otherwise every iteration will return an error.
 pub struct WavSamples<'wr, R, S> where R: 'wr {
     reader: &'wr mut WavReader<R>,
     phantom_sample: marker::PhantomData<S>
@@ -499,6 +504,12 @@ impl<R> WavReader<R> where R: io::Read {
     /// if you call this method once, read a few samples, and call this method
     /// again, the second iterator will not start again from the beginning of
     /// the file, it will continue where the first iterator stopped.
+    ///
+    /// The type `S` must have at least `spec().bits_per_sample` bits,
+    /// otherwise every iteration will return an error. All bit depths up to
+    /// 32 bits per sample can be decoded into an `i32`, but if you know
+    /// beforehand that you will be reading a file with 16 bits per sample, you
+    /// can save memory by decoding into an `i16`.
     pub fn samples<'wr, S: Sample>(&'wr mut self) -> WavSamples<'wr, R, S> {
         WavSamples {
             reader: self,
@@ -520,7 +531,8 @@ impl<R> WavReader<R> where R: io::Read {
     ///
     /// The length of the file is its duration (in samples) times the number of
     /// channels. The length is independent of how many samples have been read
-    /// already.
+    /// already. To get the number of samples left, use `size_hint` on the
+    /// `samples()` iterator.
     pub fn len(&self) -> u32 {
         self.num_samples
     }

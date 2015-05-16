@@ -109,12 +109,13 @@ fn verify_channel_mask()
 
 /// A writer that accepts samples and writes the WAVE format.
 ///
-/// TODO: add example.
-///
+/// The writer needs a `WavSpec` that describes the audio properties. Then
+/// samples can be written with `write_sample`. Channel data is interleaved.
+/// The number of samples written must be a multiple of the number of channels.
 /// After all samples have been written, the file must be finalized. This can
 /// be done by calling `finalize`. If `finalize` is not called, the file will
-/// be finalized upon drop. However, finalization involves IO that may fail,
-/// and without calling `finalize`, such a failure cannot be observed.
+/// be finalized upon drop. However, finalization may fail, and without calling
+/// `finalize`, such a failure cannot be observed.
 pub struct WavWriter<W> where W: io::Write + io::Seek {
     /// Specifies properties of the audio data.
     spec: WavSpec,
@@ -233,7 +234,8 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     /// Writes a single sample for one channel.
     ///
     /// WAVE interleaves channel data, so the channel that this writes the
-    /// sample to depends on previous writes.
+    /// sample to depends on previous writes. This will return an error if the
+    /// sample does not fit in the number of bits specified in the `WavSpec`.
     pub fn write_sample<S: Sample>(&mut self, sample: S) -> Result<()> {
         if !self.wrote_header {
             try!(self.write_header());
@@ -300,7 +302,7 @@ impl WavWriter<fs::File> {
     /// Creates a writer that writes the WAVE format to a file.
     ///
     /// This is a convenience constructor that creates the file and then
-    /// constructs a `WavReader` from it. The file will be overwritten if it
+    /// constructs a `WavWriter` from it. The file will be overwritten if it
     /// exists.
     pub fn create<P: AsRef<path::Path>>(filename: P, spec: WavSpec)
            -> io::Result<WavWriter<fs::File>> {

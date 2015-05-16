@@ -15,8 +15,6 @@
 
 //! Hound, a WAV encoding and decoding library.
 //!
-//! TODO: Add some introductory text here.
-//!
 //! Examples
 //! ========
 //!
@@ -73,6 +71,11 @@ pub use read::{WavReader, WavSamples};
 pub use write::WavWriter;
 
 /// A type that can be used to represent audio samples.
+///
+/// Via this trait, decoding can be generic over `i8`, `i16` and `i32`. All bit
+/// depths up to 32 bits per sample can be decoded into `i32`, but it takes up
+/// more memory. If you know beforehand that you will be reading a file with
+/// 16 bits per sample, then decoding into an `i16` will be sufficient.
 pub trait Sample {
     /// Writes the audio sample to the WAVE data chunk.
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()>;
