@@ -40,7 +40,8 @@
 //! writer.finalize().unwrap();
 //! ```
 //!
-//! The following example computes the RMS (root mean square) of an audio file.
+//! The following example computes the root mean square (RMS) of an audio file
+//! with at most 16 bits per sample.
 //!
 //! ```
 //! use hound;
