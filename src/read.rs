@@ -575,6 +575,10 @@ where R: io::Read,
     }
 }
 
+impl<'wr, R, S> ExactSizeIterator for WavSamples<'wr, R, S>
+where R: io::Read,
+      S: Sample { }
+
 #[test]
 fn duration_and_len_agree() {
     let files = &["testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
