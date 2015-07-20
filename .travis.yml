@@ -4,8 +4,12 @@ notifications:
   email:
     on_success: never
 
-install:
-  - sudo apt-get install libasound2-dev
+sudo: false
+
+addons:
+  apt:
+    packages:
+    - libasound2-dev
 
 rust:
   - 1.0.0
