@@ -658,6 +658,25 @@ fn len_and_size_hint_are_correct() {
     }
 }
 
+#[test]
+fn size_hint_is_exact() {
+    let files = &["testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
+                  "testsamples/waveformatex-16bit-44100Hz-stereo.wav",
+                  "testsamples/waveformatextensible-32bit-48kHz-stereo.wav"];
+
+    for fname in files {
+        let mut reader = WavReader::open(fname).unwrap();
+        let len = reader.len();
+        let mut iter = reader.samples::<i32>();
+        for i in 0 .. len {
+            let remaining = (len - i) as usize;
+            assert_eq!(iter.size_hint(), (remaining, Some(remaining)));
+            assert!(iter.next().is_some());
+        }
+        assert!(iter.next().is_none());
+    }
+}
+
 /// Tests reading a wave file with the WAVEFORMATEX struct.
 #[test]
 fn read_wav_wave_format_ex_pcm() {
