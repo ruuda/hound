@@ -47,12 +47,12 @@
 //! use hound;
 //!
 //! let mut reader = hound::WavReader::open("testsamples/pop.wav").unwrap();
-//! let (sqr_sum, n) = reader.samples::<i16>()
-//!                          .fold((0_f64, 0_u32), |(sqr_sum, n), s| {
+//! let sqr_sum = reader.samples::<i16>()
+//!                     .fold(0.0, |sqr_sum, s| {
 //!     let sample = s.unwrap() as f64;
-//!     (sqr_sum + sample * sample, n + 1)
+//!     sqr_sum + sample * sample
 //! });
-//! println!("RMS is {}", (sqr_sum / n as f64).sqrt());
+//! println!("RMS is {}", (sqr_sum / reader.len() as f64).sqrt());
 //! ```
 
 #![warn(missing_docs)]
