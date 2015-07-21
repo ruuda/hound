@@ -1,4 +1,4 @@
-// Hound -- A WAV encoding and decoding library in Rust
+// Hound -- A wav encoding and decoding library in Rust
 // Copyright (C) 2015 Ruud van Asseldonk
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Hound, a WAV encoding and decoding library.
+//! Hound, a wav encoding and decoding library.
 //!
 //! Examples
 //! ========

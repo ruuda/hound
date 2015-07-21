@@ -1,6 +1,6 @@
 Hound
 =====
-A WAV encoding and decoding library in Rust.
+A wav encoding and decoding library in Rust.
 
 [![Build Status][ci-img]][ci]
 [![Crates.io version][crate-img]][crate]
