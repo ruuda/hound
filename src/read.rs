@@ -19,11 +19,6 @@ use std::marker;
 use std::path;
 use super::{Error, Result, Sample, WavSpec};
 
-// TODO: Can this be unified among Hound and Claxon? Copy + Paste is bad, but
-// I refuse to use an external crate just to read into an array of bytes, or
-// to read an integer. Such functionality should really be in the standard
-// library. Practically _every_ program that does IO will need more high-level
-// functionality than what the standard library currently provides.
 /// Extends the functionality of `io::Read` with additional methods.
 ///
 /// The methods may be used on any type that implements `io::Read`.
@@ -32,6 +27,7 @@ pub trait ReadExt: io::Read {
     ///
     /// This may issue multiple `read` calls internally. An error is returned
     /// if `read` read 0 bytes before the buffer is full.
+    //  TODO: There is an RFC proposing a method like this for the standard library.
     fn read_into(&mut self, buf: &mut [u8]) -> io::Result<()>;
 
     /// Reads `n` bytes and returns them in a vector.
