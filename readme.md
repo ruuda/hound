@@ -51,6 +51,14 @@ let sqr_sum = reader.samples::<i16>()
 println!("RMS is {}", (sqr_sum / reader.len() as f64).sqrt());
 ```
 
+Features
+--------
+|                 | Read                                                    | Write                  |
+|-----------------|---------------------------------------------------------|------------------------|
+| Format          | `PCMWAVEFORMAT`, `WAVEFORMATEX`, `WAVEFORMATEXTENSIBLE` | `WAVEFORMATEXTENSIBLE` |
+| Encoding        | PCM                                                     | PCM                    |
+| Bits per sample | 8, 16, 24, 32                                           | 8, 16, 24, 32          |
+
 License
 -------
 Hound is licensed under the [GNU General Public License version 3][gplv3]
