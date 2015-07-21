@@ -32,7 +32,7 @@ fn main() {
 
     let mut append_data = |voice: &mut cpal::Voice| {
         let mut samples = reader.samples::<i16>();
-        let samples_left = samples.size_hint().0; // TODO: add method to reader?
+        let samples_left = samples.size_hint().0;
 
         if samples_left == 0 { return false; }
 
