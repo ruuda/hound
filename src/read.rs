@@ -516,7 +516,7 @@ impl<R> WavReader<R> where R: io::Read {
     ///
     /// The length of the file is its duration (in samples) times the number of
     /// channels. The length is independent of how many samples have been read
-    /// already. To get the number of samples left, use `size_hint` on the
+    /// already. To get the number of samples left, use `len()` on the
     /// `samples()` iterator.
     pub fn len(&self) -> u32 {
         self.num_samples
