@@ -214,8 +214,6 @@ impl<R> WavReader<R> where R: io::Read {
             return Err(Error::FormatError("no RIFF tag found"));
         }
 
-        // TODO: would this be useful anywhere? Probably not, except for
-        // validating files, but do we need to be so strict?
         let file_len = try!(reader.read_le_u32());
 
         // Next four bytes indicate the file type, which should be WAVE.
