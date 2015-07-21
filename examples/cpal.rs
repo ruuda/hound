@@ -25,7 +25,7 @@ fn main() {
     // Make a WavReader that reads the file provided as program argument.
     let fname = env::args().nth(1).expect("no file given");
     let mut reader = hound::WavReader::open(fname).unwrap();
-    let spec = reader.spec().clone(); // TODO: by value might be better in this case.
+    let spec = reader.spec();
 
     // A voice in cpal is used for playback.
     let mut voice = cpal::Voice::new();

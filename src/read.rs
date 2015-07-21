@@ -485,13 +485,9 @@ impl<R> WavReader<R> where R: io::Read {
         Ok(wav_reader)
     }
 
-    // TODO: Should this return by value instead? A reference is more consistent
-    // with Claxon, but the type is only 80 bits, barely larger than a pointer.
-    // Is it worth the extra indirection? On the other hand, the indirection
-    // is probably optimised away.
     /// Returns information about the WAVE file.
-    pub fn spec(&self) -> &WavSpec {
-        &self.spec
+    pub fn spec(&self) -> WavSpec {
+        self.spec
     }
 
     /// Returns an iterator over all samples.

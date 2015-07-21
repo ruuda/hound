@@ -341,7 +341,7 @@ fn write_read_i16_is_lossless() {
     {
         buffer.set_position(0);
         let mut reader = WavReader::new(&mut buffer).unwrap();
-        assert_eq!(&write_spec, reader.spec());
+        assert_eq!(write_spec, reader.spec());
         for (expected, read) in (-1024_i16 .. 1024).zip(reader.samples()) {
             assert_eq!(expected, read.unwrap());
         }
@@ -371,7 +371,7 @@ fn write_read_i8_is_lossless() {
     {
         buffer.set_position(0);
         let mut reader = WavReader::new(&mut buffer).unwrap();
-        assert_eq!(&write_spec, reader.spec());
+        assert_eq!(write_spec, reader.spec());
         for (expected, read) in (-128_i16 .. 127 + 1).zip(reader.samples()) {
             assert_eq!(expected, read.unwrap());
         }
@@ -401,7 +401,7 @@ fn write_read_i24_is_lossless() {
     {
         buffer.set_position(0);
         let mut reader = WavReader::new(&mut buffer).unwrap();
-        assert_eq!(&write_spec, reader.spec());
+        assert_eq!(write_spec, reader.spec());
         for (expected, read) in (-128_i32 .. 127 + 1).map(|x| x * 256 * 256)
                                                      .zip(reader.samples()) {
             assert_eq!(expected, read.unwrap());
