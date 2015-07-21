@@ -78,9 +78,11 @@ impl<R> ReadExt for R where R: io::Read {
     }
 
     fn read_bytes(&mut self, n: usize) -> io::Result<Vec<u8>> {
+        // We allocate a runtime fixed size buffer, and we are going to read
+        // into it, so zeroing or filling the buffer is a waste. This method
+        // is safe, because the contents of the buffer are only exposed when
+        // they have been overwritten completely by the read.
         let mut buf = Vec::with_capacity(n);
-        // TODO: is there a safe alternative that is not crazy like draining
-        // a repeat(0u8) iterator?
         unsafe { buf.set_len(n); }
         try!(self.read_into(&mut buf[..]));
         Ok(buf)
