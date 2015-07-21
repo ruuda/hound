@@ -398,12 +398,8 @@ impl<R> WavReader<R> where R: io::Read {
         try!(reader.read_into(&mut subformat));
 
         // Several GUIDS are defined. At the moment, only KSDATAFORMAT_SUBTYPE_PCM
-        // is supported.
-        // TODO: Extract all these constants to a common place.
-        if subformat != [0x01, 0x00, 0x00, 0x00,
-                         0x00, 0x00, 0x10, 0x00,
-                         0x80, 0x00, 0x00, 0xaa,
-                         0x00, 0x38, 0x9b, 0x71] {
+        // is supported (PCM audio with integer samples).
+        if subformat != super::KSDATAFORMAT_SUBTYPE_PCM {
             return Err(Error::Unsupported);
         }
 

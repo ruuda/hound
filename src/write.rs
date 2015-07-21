@@ -204,18 +204,8 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
             // TODO: add the option to specify the channel mask. For now, use
             // the default assignment.
             try!(buffer.write_le_u32(channel_mask(self.spec.channels)));
-            // The field SubFormat. We use KSDATAFORMAT_SUBTYPE_PCM. The
-            // following GUIDS are defined:
-            // - PCM:        00000001-0000-0010-8000-00aa00389b71
-            // - IEEE_FLOAT: 00000003-0000-0010-8000-00aa00389b71
-            // The byte order of a GUID is native for the first three sections,
-            // which is assumed to be little endian, and big endian for the
-            // last 8-byte section (which does contain a hyphen, for reasons
-            // unknown to me).
-            try!(buffer.write_all(&[0x01, 0x00, 0x00, 0x00,
-                                    0x00, 0x00, 0x10, 0x00,
-                                    0x80, 0x00, 0x00, 0xaa,
-                                    0x00, 0x38, 0x9b, 0x71]));
+            // The field SubFormat. We use PCM audio with integer samples.
+            try!(buffer.write_all(&super::KSDATAFORMAT_SUBTYPE_PCM));
 
             // So far the "fmt " section, now comes the "data" section. We will
             // only write the header here, actual data are the samples. The
