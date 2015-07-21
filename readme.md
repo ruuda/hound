@@ -69,6 +69,6 @@ non-commercial use under the conditions given in the license.
 [ci]:        https://travis-ci.org/ruud-v-a/hound
 [crate-img]: http://img.shields.io/crates/v/hound.svg
 [crate]:     https://crates.io/crates/hound
-[docs]:      https://ruud-v-a.github.io/hound/doc/v0.4.0/hound/
+[docs]:      https://ruud-v-a.github.io/hound/doc/v1.0.0/hound/
 [claxon]:    https://github.com/ruud-v-a/claxon
 [apache2]:   https://www.apache.org/licenses/LICENSE-2.0
