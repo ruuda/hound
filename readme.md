@@ -61,8 +61,9 @@ Features
 
 License
 -------
-Hound is licensed under the [GNU General Public License version 3][gplv3]
-during the initial development phase.
+Hound is licensed under the [Apache 2.0][apache2] license. It may be used in
+free software as well as closed-source applications, both for commercial and
+non-commercial use under the conditions given in the license.
 
 [ci-img]:    https://travis-ci.org/ruud-v-a/hound.svg?branch=master
 [ci]:        https://travis-ci.org/ruud-v-a/hound
@@ -70,4 +71,4 @@ during the initial development phase.
 [crate]:     https://crates.io/crates/hound
 [docs]:      https://ruud-v-a.github.io/hound/doc/v0.4.0/hound/
 [claxon]:    https://github.com/ruud-v-a/claxon
-[gplv3]:     https://www.gnu.org/licenses/gpl.html
+[apache2]:   https://www.apache.org/licenses/LICENSE-2.0
