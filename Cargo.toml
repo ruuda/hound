@@ -12,7 +12,7 @@ repository = "https://github.com/ruud-v-a/hound"
 documentation = "https://ruud-v-a.github.io/hound/doc/v1.0.0/hound/"
 
 [dev-dependencies]
-cpal = "0.0.20"
+cpal = "0.1.2"
 
 # TODO: enable this when sound_stream (or portaudio, actually) builds properly.
 # sound_stream = "0.3.2"
