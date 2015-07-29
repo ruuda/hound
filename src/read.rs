@@ -602,7 +602,7 @@ fn read_wav_skips_unknown_chunks() {
     let files = ["testsamples/pcmwaveformat-16bit-44100Hz-mono-extra.wav",
                  "testsamples/waveformatex-16bit-44100Hz-mono-extra.wav"];
 
-    for file in files.iter() {
+    for file in &files {
         let mut wav_reader = WavReader::open(file)
                                        .unwrap();
 
