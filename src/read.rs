@@ -521,6 +521,11 @@ impl<R> WavReader<R> where R: io::Read {
     pub fn len(&self) -> u32 {
         self.num_samples
     }
+
+    /// Destroys the `WavReader` and returns the underlying reader.
+    pub fn into_inner(self) -> R {
+        self.reader
+    }
 }
 
 impl WavReader<io::BufReader<fs::File>> {
