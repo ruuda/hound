@@ -198,6 +198,15 @@ pub struct WavSamples<'wr, R, S> where R: 'wr {
     phantom_sample: marker::PhantomData<S>
 }
 
+/// An iterator that yields samples of type `S` read from a `WavReader`.
+///
+/// The type `S` must have at least as many bits as the bits per sample of the
+/// file, otherwise every iteration will return an error.
+pub struct WavIntoSamples<R, S> {
+    reader: WavReader<R>,
+    phantom_sample: marker::PhantomData<S>
+}
+
 impl<R> WavReader<R> where R: io::Read {
 
     /// Reads the RIFF WAVE header, returns the supposed file size.
@@ -502,6 +511,16 @@ impl<R> WavReader<R> where R: io::Read {
         }
     }
 
+    /// Same as `samples`, but takes ownership of the `WavReader`.
+    ///
+    /// See `samples()` for more info.
+    pub fn into_samples<S: Sample>(self) -> WavIntoSamples<R, S> {
+        WavIntoSamples {
+            reader: self,
+            phantom_sample: marker::PhantomData
+        }
+    }
+
     /// Returns the duration of the file in samples.
     ///
     /// The duration is independent of the number of channels. It is expressed
@@ -561,6 +580,34 @@ where R: io::Read,
 }
 
 impl<'wr, R, S> ExactSizeIterator for WavSamples<'wr, R, S>
+where R: io::Read,
+      S: Sample { }
+
+impl<R, S> Iterator for WavIntoSamples<R, S>
+where R: io::Read,
+      S: Sample {
+    type Item = Result<S>;
+
+    fn next(&mut self) -> Option<Result<S>> {
+        let reader = &mut self.reader;
+        if reader.samples_read < reader.num_samples {
+            reader.samples_read += 1;
+            let sample = Sample::read(&mut reader.reader,
+                                      reader.bytes_per_sample,
+                                      reader.spec.bits_per_sample);
+            Some(sample.map_err(Error::from))
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let samples_left = self.reader.num_samples - self.reader.samples_read;
+        (samples_left as usize, Some(samples_left as usize))
+    }
+}
+
+impl<R, S> ExactSizeIterator for WavIntoSamples<R, S>
 where R: io::Read,
       S: Sample { }
 
