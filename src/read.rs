@@ -560,27 +560,36 @@ impl WavReader<io::BufReader<fs::File>> {
     }
 }
 
+fn iter_next<R, S>(reader: &mut WavReader<R>) -> Option<Result<S>>
+where R: io::Read,
+      S: Sample {
+    if reader.samples_read < reader.num_samples {
+        reader.samples_read += 1;
+        let sample = Sample::read(&mut reader.reader,
+                                  reader.bytes_per_sample,
+                                  reader.spec.bits_per_sample);
+        Some(sample.map_err(Error::from))
+    } else {
+        None
+    }
+}
+
+fn iter_size_hint<R>(reader: &WavReader<R>) -> (usize, Option<usize>) {
+    let samples_left = reader.num_samples - reader.samples_read;
+    (samples_left as usize, Some(samples_left as usize))
+}
+
 impl<'wr, R, S> Iterator for WavSamples<'wr, R, S>
 where R: io::Read,
       S: Sample {
     type Item = Result<S>;
 
     fn next(&mut self) -> Option<Result<S>> {
-        let reader = &mut self.reader;
-        if reader.samples_read < reader.num_samples {
-            reader.samples_read += 1;
-            let sample = Sample::read(&mut reader.reader,
-                                      reader.bytes_per_sample,
-                                      reader.spec.bits_per_sample);
-            Some(sample.map_err(Error::from))
-        } else {
-            None
-        }
+        iter_next(&mut self.reader)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let samples_left = self.reader.num_samples - self.reader.samples_read;
-        (samples_left as usize, Some(samples_left as usize))
+        iter_size_hint(&self.reader)
     }
 }
 
@@ -594,21 +603,11 @@ where R: io::Read,
     type Item = Result<S>;
 
     fn next(&mut self) -> Option<Result<S>> {
-        let reader = &mut self.reader;
-        if reader.samples_read < reader.num_samples {
-            reader.samples_read += 1;
-            let sample = Sample::read(&mut reader.reader,
-                                      reader.bytes_per_sample,
-                                      reader.spec.bits_per_sample);
-            Some(sample.map_err(Error::from))
-        } else {
-            None
-        }
+        iter_next(&mut self.reader)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let samples_left = self.reader.num_samples - self.reader.samples_read;
-        (samples_left as usize, Some(samples_left as usize))
+        iter_size_hint(& self.reader)
     }
 }
 
