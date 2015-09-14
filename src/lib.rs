@@ -74,7 +74,7 @@ pub use write::WavWriter;
 /// depths up to 32 bits per sample can be decoded into `i32`, but it takes up
 /// more memory. If you know beforehand that you will be reading a file with
 /// 16 bits per sample, then decoding into an `i16` will be sufficient.
-pub trait Sample {
+pub trait Sample: Sized {
     /// Writes the audio sample to the WAVE data chunk.
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()>;
 
