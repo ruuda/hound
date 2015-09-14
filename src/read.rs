@@ -713,6 +713,22 @@ fn size_hint_is_exact() {
     }
 }
 
+#[test]
+fn samples_equals_into_samples() {
+    let wav_reader_val = WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav").unwrap();
+    let mut wav_reader_ref = WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav").unwrap();
+
+    let samples_val: Vec<i16> = wav_reader_val.into_samples()
+                                              .map(|r| r.unwrap())
+                                              .collect();
+
+    let samples_ref: Vec<i16> = wav_reader_ref.samples()
+                                              .map(|r| r.unwrap())
+                                              .collect();
+
+    assert_eq!(samples_val, samples_ref);
+}
+
 /// Tests reading a wave file with the WAVEFORMATEX struct.
 #[test]
 fn read_wav_wave_format_ex_pcm() {
