@@ -100,10 +100,10 @@ fn u8_from_signed(x: i8) -> u8 {
 
 #[test]
 fn u8_sign_conversion_is_bijective() {
-    for x in (0 .. 255) {
+    for x in 0 .. 255 {
         assert_eq!(x, u8_from_signed(signed_from_u8(x)));
     }
-    for x in (-128 .. 127) {
+    for x in -128 .. 127 {
         assert_eq!(x, signed_from_u8(u8_from_signed(x)));
     }
 }
@@ -344,7 +344,7 @@ fn write_read_i16_is_lossless() {
 
     {
         let mut writer = WavWriter::new(&mut buffer, write_spec);
-        for s in (-1024_i16 .. 1024) {
+        for s in -1024_i16 .. 1024 {
             writer.write_sample(s).unwrap();
         }
         writer.finalize().unwrap();
@@ -373,7 +373,7 @@ fn write_read_i8_is_lossless() {
     {
         let mut writer = WavWriter::new(&mut buffer, write_spec);
         // Iterate over i16 because we cannot specify the upper bound otherwise.
-        for s in (-128_i16 .. 127 + 1) {
+        for s in -128_i16 .. 127 + 1 {
             writer.write_sample(s as i8).unwrap();
         }
         writer.finalize().unwrap();
@@ -402,7 +402,7 @@ fn write_read_i24_is_lossless() {
     // Write `i32` samples, but with at most 24 bits per sample.
     {
         let mut writer = WavWriter::new(&mut buffer, write_spec);
-        for s in (-128_i32 .. 127 + 1) {
+        for s in -128_i32 .. 127 + 1 {
             writer.write_sample(s * 256 * 256).unwrap();
         }
         writer.finalize().unwrap();
