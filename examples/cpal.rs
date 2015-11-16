@@ -17,6 +17,7 @@ extern crate cpal;
 
 use std::env;
 use std::thread;
+use std::time;
 
 fn main() {
     // Make a WavReader that reads the file provided as program argument.
@@ -55,5 +56,5 @@ fn main() {
 
     // TODO: Cpal has no function (yet) to wait for playback to complete, so
     // sleep manually.
-    thread::sleep_ms(1000);
+    thread::sleep(time::Duration::from_secs(1));
 }
