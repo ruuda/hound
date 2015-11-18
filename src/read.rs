@@ -301,15 +301,15 @@ impl<R> WavReader<R> where R: io::Read {
 
         // Two of the stored fields are redundant, and may be ignored. We do
         // validate them to fail early for ill-formed files.
-        if (bits_per_sample != block_align / n_channels * 8)
-        || (n_bytes_per_sec != block_align as u32 * n_samples_per_sec) {
+        if (bits_per_sample != block_align / n_channels * 8) ||
+           (n_bytes_per_sec != block_align as u32 * n_samples_per_sec) {
             return Err(Error::FormatError("inconsistent fmt chunk"));
         }
 
         // The bits per sample for a WAVEFORMAT struct is the number of bits
         // used to store a sample. Therefore, it must be a multiple of 8.
         if bits_per_sample % 8 != 0 {
-           return Err(Error::FormatError("bits per sample is not a multiple of 8"));
+            return Err(Error::FormatError("bits per sample is not a multiple of 8"));
         }
 
         let spec = WavSpec {
@@ -607,7 +607,7 @@ where R: io::Read,
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        iter_size_hint(& self.reader)
+        iter_size_hint(&self.reader)
     }
 }
 
@@ -654,8 +654,7 @@ fn read_wav_skips_unknown_chunks() {
                  "testsamples/waveformatex-16bit-44100Hz-mono-extra.wav"];
 
     for file in &files {
-        let mut wav_reader = WavReader::open(file)
-                                       .unwrap();
+        let mut wav_reader = WavReader::open(file).unwrap();
 
         assert_eq!(wav_reader.spec().channels, 1);
         assert_eq!(wav_reader.spec().sample_rate, 44100);

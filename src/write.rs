@@ -95,8 +95,7 @@ fn channel_mask(channels: u16) -> u32 {
 }
 
 #[test]
-fn verify_channel_mask()
-{
+fn verify_channel_mask() {
     assert_eq!(channel_mask(0), 0);
     assert_eq!(channel_mask(1), 1);
     assert_eq!(channel_mask(2), 3);
