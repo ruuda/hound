@@ -57,7 +57,6 @@
 use std::error;
 use std::fmt;
 use std::io;
-use std::io::Write;
 use std::result;
 use read::ReadExt;
 use write::WriteExt;
