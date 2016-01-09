@@ -63,7 +63,9 @@ License
 -------
 Hound is licensed under the [Apache 2.0][apache2] license. It may be used in
 free software as well as closed-source applications, both for commercial and
-non-commercial use under the conditions given in the license.
+non-commercial use under the conditions given in the license. If you want to
+use Hound in your GPLv2-licensed software, you can add an [exception][exception]
+to your copyright notice.
 
 [ci-img]:    https://travis-ci.org/ruud-v-a/hound.svg?branch=master
 [ci]:        https://travis-ci.org/ruud-v-a/hound
@@ -72,3 +74,4 @@ non-commercial use under the conditions given in the license.
 [docs]:      https://ruud-v-a.github.io/hound/doc/v1.1.0/hound/
 [claxon]:    https://github.com/ruud-v-a/claxon
 [apache2]:   https://www.apache.org/licenses/LICENSE-2.0
+[exception]: https://www.gnu.org/licenses/gpl-faq.html#GPLIncompatibleLibs
