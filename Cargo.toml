@@ -7,9 +7,9 @@ description = "A wav encoding and decoding library"
 keywords = ["wav", "wave", "audio", "codec"]
 license = "Apache-2.0"
 readme = "readme.md"
-homepage = "https://github.com/ruud-v-a/hound"
-repository = "https://github.com/ruud-v-a/hound"
-documentation = "https://ruud-v-a.github.io/hound/doc/v1.1.0/hound/"
+homepage = "https://github.com/ruuda/hound"
+repository = "https://github.com/ruuda/hound"
+documentation = "https://ruuda.github.io/hound/doc/v1.1.0/hound/"
 
 [dev-dependencies]
 cpal = "0.1.2"

@@ -67,11 +67,11 @@ non-commercial use under the conditions given in the license. If you want to
 use Hound in your GPLv2-licensed software, you can add an [exception][exception]
 to your copyright notice.
 
-[ci-img]:    https://travis-ci.org/ruud-v-a/hound.svg?branch=master
-[ci]:        https://travis-ci.org/ruud-v-a/hound
+[ci-img]:    https://travis-ci.org/ruuda/hound.svg?branch=master
+[ci]:        https://travis-ci.org/ruuda/hound
 [crate-img]: http://img.shields.io/crates/v/hound.svg
 [crate]:     https://crates.io/crates/hound
-[docs]:      https://ruud-v-a.github.io/hound/doc/v1.1.0/hound/
-[claxon]:    https://github.com/ruud-v-a/claxon
+[docs]:      https://ruuda.github.io/hound/doc/v1.1.0/hound/
+[claxon]:    https://github.com/ruuda/claxon
 [apache2]:   https://www.apache.org/licenses/LICENSE-2.0
 [exception]: https://www.gnu.org/licenses/gpl-faq.html#GPLIncompatibleLibs
