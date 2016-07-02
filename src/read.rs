@@ -447,11 +447,6 @@ impl<R> WavReader<R> where R: io::Read {
 
         // Several GUIDS are defined. At the moment, only KSDATAFORMAT_SUBTYPE_PCM
         // is supported (PCM audio with integer samples).
-        if subformat != super::KSDATAFORMAT_SUBTYPE_PCM
-        && subformat != super::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT {
-            return Err(Error::Unsupported);
-        }
-
         let sample_format = match subformat {
             super::KSDATAFORMAT_SUBTYPE_PCM => SampleFormat::Int,
             super::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT => SampleFormat::Float,
