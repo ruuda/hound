@@ -12,6 +12,7 @@
 
 use std::fs;
 use std::io;
+use std::mem;
 use std::io::Write;
 use std::path;
 use super::{Error, Result, Sample, WavSpec};
@@ -44,6 +45,9 @@ pub trait WriteExt: io::Write {
 
     /// Writes an unsigned 32-bit integer in little endian format.
     fn write_le_u32(&mut self, x: u32) -> io::Result<()>;
+
+    /// Writes an IEEE float in little endian format.
+    fn write_le_f32(&mut self, x: f32) -> io::Result<()>;
 }
 
 impl<W> WriteExt for W where W: io::Write {
@@ -86,6 +90,11 @@ impl<W> WriteExt for W where W: io::Write {
         buf[2] = ((x >> 16) & 0xff) as u8;
         buf[3] = ((x >> 24) & 0xff) as u8;
         self.write_all(&buf)
+    }
+
+    fn write_le_f32(&mut self, x: f32) -> io::Result<()> {
+        let u = unsafe { mem::transmute(x) };
+        self.write_le_u32(u)
     }
 }
 

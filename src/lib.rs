@@ -227,6 +227,33 @@ impl Sample for i32 {
     }
 }
 
+impl Sample for f32 {
+    fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
+        match bits {
+            32 => Ok(try!(writer.write_le_f32(self))),
+            _ => Err(Error::Unsupported),
+        }
+    }
+
+    fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<Self> {
+        match (bytes, bits) {
+            (4, 32) => Ok(try!(reader.read_le_f32())),
+            (n, _) if n > 4 => Err(Error::TooWide),
+            _ => Err(Error::Unsupported),
+        }
+    }
+}
+
+/// Specifies whether a sample is stored as an "IEEE Float" or an integer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SampleFormat {
+    /// Wave files with the `WAVE_FORMAT_IEEE_FLOAT` format tag store samples as floating point
+    /// values with a full scale of 1.0.
+    Float,
+    /// Wave files with the `WAVE_FORMAT_PCM` format tag store samples as integer values.
+    Int,
+}
+
 /// Specifies properties of the audio data.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WavSpec {
@@ -241,7 +268,10 @@ pub struct WavSpec {
     /// The number of bits per sample.
     ///
     /// A common value is 16 bits per sample, which is used for CD audio.
-    pub bits_per_sample: u16
+    pub bits_per_sample: u16,
+
+    /// Whether the wav's samples are float or integer values.
+    pub sample_format: SampleFormat,
 }
 
 /// The error type for operations on `WavReader` and `WavWriter`.
@@ -331,6 +361,12 @@ const KSDATAFORMAT_SUBTYPE_PCM: [u8; 16] = [0x01, 0x00, 0x00, 0x00,
                                             0x00, 0x00, 0x10, 0x00,
                                             0x80, 0x00, 0x00, 0xaa,
                                             0x00, 0x38, 0x9b, 0x71];
+
+/// Subformat type for IEEE_FLOAT audio with float samples.
+const KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: [u8; 16] = [0x03, 0x00, 0x00, 0x00,
+                                                   0x00, 0x00, 0x10, 0x00,
+                                                   0x80, 0x00, 0x00, 0xaa,
+                                                   0x00, 0x38, 0x9b, 0x71];
 
 #[test]
 fn write_read_i16_is_lossless() {

@@ -13,8 +13,9 @@
 use std::fs;
 use std::io;
 use std::marker;
+use std::mem;
 use std::path;
-use super::{Error, Result, Sample, WavSpec};
+use super::{Error, Result, Sample, SampleFormat, WavSpec};
 
 /// Extends the functionality of `io::Read` with additional methods.
 ///
@@ -57,6 +58,9 @@ pub trait ReadExt: io::Read {
 
     /// Reads four bytes and interprets them as a little-endian 32-bit unsigned integer.
     fn read_le_u32(&mut self) -> io::Result<u32>;
+
+    /// Reads four bytes and interprets them as a little-endian 32-bit IEEE float.
+    fn read_le_f32(&mut self) -> io::Result<f32>;
 }
 
 impl<R> ReadExt for R where R: io::Read {
@@ -133,11 +137,16 @@ impl<R> ReadExt for R where R: io::Read {
         Ok((buf[3] as u32) << 24 | (buf[2] as u32) << 16 |
            (buf[1] as u32) << 8  | (buf[0] as u32) << 0)
     }
+
+    fn read_le_f32(&mut self) -> io::Result<f32> {
+        self.read_le_u32().map(|u| unsafe { mem::transmute(u) })
+    }
 }
 
 /// The different chunks that a WAVE file can contain.
 enum ChunkKind {
     Fmt,
+    Fact,
     Data,
     Unknown
 }
@@ -238,8 +247,9 @@ impl<R> WavReader<R> where R: io::Read {
 
         let kind = match &kind_str[..] {
             b"fmt " => ChunkKind::Fmt,
+            b"fact" => ChunkKind::Fact,
             b"data" => ChunkKind::Data,
-            _ => ChunkKind::Unknown
+            _ => ChunkKind::Unknown,
         };
 
         Ok(ChunkHeader { kind: kind, len: len })
@@ -315,20 +325,23 @@ impl<R> WavReader<R> where R: io::Read {
         let spec = WavSpec {
             channels: n_channels,
             sample_rate: n_samples_per_sec,
-            bits_per_sample: bits_per_sample
+            bits_per_sample: bits_per_sample,
+            sample_format: SampleFormat::Int,
         };
 
         // The different format tag definitions can be found in mmreg.h that is
         // part of the Windows SDK. The vast majority are esoteric vendor-
         // specific formats. We handle only a few. The following values could
         // be of interest:
-        // 0x0001: WAVE_FORMAT_PCM
-        // 0x0002: WAVE_FORMAT_ADPCM
-        // 0x0003: WAVE_FORMAT_IEEE_FLOAT
-        // 0xfffe: WAVE_FORMAT_EXTENSIBLE
+        const PCM: u16 = 0x0001;
+        const ADPCM: u16 = 0x0002;
+        const IEEE_FLOAT: u16 = 0x0003;
+        const EXTENSIBLE: u16 = 0xfffe;
         match format_tag {
-            0x0001 => WavReader::read_wave_format_pcm(reader, chunk_len, spec),
-            0xfffe => WavReader::read_wave_format_extensible(reader, chunk_len, spec),
+            PCM => WavReader::read_wave_format_pcm(reader, chunk_len, spec),
+            ADPCM => Err(Error::Unsupported),
+            IEEE_FLOAT => WavReader::read_wave_format_ieee_float(reader, chunk_len, spec),
+            EXTENSIBLE => WavReader::read_wave_format_extensible(reader, chunk_len, spec),
             _ => Err(Error::Unsupported)
         }
     }
@@ -362,6 +375,35 @@ impl<R> WavReader<R> where R: io::Read {
         let spec_ex = WavSpecEx {
             spec: spec,
             bytes_per_sample: spec.bits_per_sample / 8
+        };
+        Ok(spec_ex)
+    }
+
+    fn read_wave_format_ieee_float(mut reader: R, chunk_len: u32, spec: WavSpec)
+                                   -> Result<WavSpecEx> {
+        // When there is a PCMWAVEFORMAT struct, the chunk is 16 bytes long.
+        // The WAVEFORMATEX structs includes two extra bytes, `cbSize`.
+        let is_wave_format_ex = chunk_len == 18;
+
+        if !is_wave_format_ex && chunk_len != 16 {
+            return Err(Error::FormatError("unexpected fmt chunk size"));
+        }
+
+        if is_wave_format_ex {
+            // For WAVE_FORMAT_IEEE_FLOAT which we are reading, there should
+            // be no extra data, so `cbSize` should be 0.
+            let cb_size = try!(reader.read_le_u16());
+            if cb_size != 0 {
+                return Err(Error::FormatError("unexpected WAVEFORMATEX size"));
+            }
+        }
+
+        let spec_ex = WavSpecEx {
+            spec: WavSpec {
+                sample_format: SampleFormat::Float,
+                ..spec
+            },
+            bytes_per_sample: spec.bits_per_sample / 8,
         };
         Ok(spec_ex)
     }
@@ -405,13 +447,21 @@ impl<R> WavReader<R> where R: io::Read {
 
         // Several GUIDS are defined. At the moment, only KSDATAFORMAT_SUBTYPE_PCM
         // is supported (PCM audio with integer samples).
-        if subformat != super::KSDATAFORMAT_SUBTYPE_PCM {
+        if subformat != super::KSDATAFORMAT_SUBTYPE_PCM
+        && subformat != super::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT {
             return Err(Error::Unsupported);
         }
+
+        let sample_format = match subformat {
+            super::KSDATAFORMAT_SUBTYPE_PCM => SampleFormat::Int,
+            super::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT => SampleFormat::Float,
+            _ => return Err(Error::Unsupported),
+        };
 
         let spec_ex = WavSpecEx {
             spec: WavSpec {
                 bits_per_sample: valid_bits_per_sample,
+                sample_format: sample_format,
                 .. spec
             },
             bytes_per_sample: spec.bits_per_sample / 8
@@ -434,6 +484,19 @@ impl<R> WavReader<R> where R: io::Read {
                     let spec = try!(WavReader::read_fmt_chunk(&mut reader,
                                                               header.len));
                     spec_opt = Some(spec);
+                },
+                ChunkKind::Fact => {
+                    // All (compressed) non-PCM formats must have a fact chunk
+                    // (Rev. 3 documentation). The chunk contains at least one
+                    // value, the number of samples in the file.
+                    //
+                    // The number of samples field is redundant for sampled
+                    // data, since the Data chunk indicates the length of the
+                    // data. The number of samples can be determined from the
+                    // length of the data and the container size as determined
+                    // from the Format chunk.
+                    // http://www-mmsp.ece.mcgill.ca/documents/audioformats/wave/wave.html
+                    let _samples_per_channel = reader.read_le_u32();
                 },
                 ChunkKind::Data => {
                     // The "fmt" chunk must precede the "data" chunk. Any
@@ -637,6 +700,7 @@ fn read_wav_pcm_wave_format_pcm() {
     assert_eq!(wav_reader.spec().channels, 1);
     assert_eq!(wav_reader.spec().sample_rate, 44100);
     assert_eq!(wav_reader.spec().bits_per_sample, 16);
+    assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
     let samples: Vec<i16> = wav_reader.samples()
                                       .map(|r| r.unwrap())
