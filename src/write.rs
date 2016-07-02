@@ -309,12 +309,15 @@ impl WavWriter<io::BufWriter<fs::File>> {
 
 #[test]
 fn short_write_should_signal_error() {
+    use SampleFormat;
+
     let mut buffer = io::Cursor::new(Vec::new());
 
     let write_spec = WavSpec {
         channels: 17,
         sample_rate: 48000,
-        bits_per_sample: 8
+        bits_per_sample: 8,
+        sample_format: SampleFormat::Int,
     };
 
     // Deliberately write one sample less than 17 * 5.
@@ -332,12 +335,15 @@ fn short_write_should_signal_error() {
 
 #[test]
 fn wide_write_should_signal_error() {
+    use SampleFormat;
+
     let mut buffer = io::Cursor::new(Vec::new());
 
     let spec8 = WavSpec {
         channels: 1,
         sample_rate: 44100,
-        bits_per_sample: 8
+        bits_per_sample: 8,
+        sample_format: SampleFormat::Int,
     };
     {
         let mut writer = WavWriter::new(&mut buffer, spec8);

@@ -23,7 +23,8 @@ use hound;
 let spec = hound::WavSpec {
     channels: 1,
     sample_rate: 44100,
-    bits_per_sample: 16
+    bits_per_sample: 16,
+    sample_format: hound::SampleFormat::Int,
 };
 let mut writer = hound::WavWriter::create("sine.wav", spec).unwrap();
 for t in (0 .. 44100).map(|x| x as f32 / 44100.0) {

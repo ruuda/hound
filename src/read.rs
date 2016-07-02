@@ -723,6 +723,7 @@ fn read_wav_skips_unknown_chunks() {
         assert_eq!(wav_reader.spec().channels, 1);
         assert_eq!(wav_reader.spec().sample_rate, 44100);
         assert_eq!(wav_reader.spec().bits_per_sample, 16);
+        assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
         let sample = wav_reader.samples::<i16>().next().unwrap().unwrap();
         assert_eq!(sample, 2);
@@ -801,6 +802,7 @@ fn read_wav_wave_format_ex_pcm() {
     assert_eq!(wav_reader.spec().channels, 1);
     assert_eq!(wav_reader.spec().sample_rate, 44100);
     assert_eq!(wav_reader.spec().bits_per_sample, 16);
+    assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
     let samples: Vec<i16> = wav_reader.samples()
                                       .map(|r| r.unwrap())
@@ -818,6 +820,7 @@ fn read_wav_stereo() {
     assert_eq!(wav_reader.spec().channels, 2);
     assert_eq!(wav_reader.spec().sample_rate, 44100);
     assert_eq!(wav_reader.spec().bits_per_sample, 16);
+    assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
     let samples: Vec<i16> = wav_reader.samples()
                                       .map(|r| r.unwrap())
@@ -834,6 +837,7 @@ fn read_wav_8bit() {
                                    .unwrap();
 
     assert_eq!(wav_reader.spec().bits_per_sample, 8);
+    assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
     let samples: Vec<i16> = wav_reader.samples()
                                       .map(|r| r.unwrap())
@@ -852,6 +856,7 @@ fn read_wav_wave_format_extensible_pcm_24bit() {
     assert_eq!(wav_reader.spec().channels, 1);
     assert_eq!(wav_reader.spec().sample_rate, 192_000);
     assert_eq!(wav_reader.spec().bits_per_sample, 24);
+    assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
     let samples: Vec<i32> = wav_reader.samples()
                                       .map(|r| r.unwrap())
@@ -867,6 +872,7 @@ fn read_wav_32bit() {
                                    .unwrap();
 
     assert_eq!(wav_reader.spec().bits_per_sample, 32);
+    assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
     let samples: Vec<i32> = wav_reader.samples()
                                       .map(|r| r.unwrap())

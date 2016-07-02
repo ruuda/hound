@@ -26,7 +26,8 @@
 //! let spec = hound::WavSpec {
 //!     channels: 1,
 //!     sample_rate: 44100,
-//!     bits_per_sample: 16
+//!     bits_per_sample: 16,
+//!     sample_format: hound::SampleFormat::Int,
 //! };
 //! let mut writer = hound::WavWriter::create("sine.wav", spec).unwrap();
 //! for t in (0 .. 44100).map(|x| x as f32 / 44100.0) {
@@ -374,7 +375,8 @@ fn write_read_i16_is_lossless() {
     let write_spec = WavSpec {
         channels: 2,
         sample_rate: 44100,
-        bits_per_sample: 16
+        bits_per_sample: 16,
+        sample_format: SampleFormat::Int,
     };
 
     {
@@ -401,7 +403,8 @@ fn write_read_i8_is_lossless() {
     let write_spec = WavSpec {
         channels: 16,
         sample_rate: 48000,
-        bits_per_sample: 8
+        bits_per_sample: 8,
+        sample_format: SampleFormat::Int,
     };
 
     // Write `i8` samples.
@@ -431,7 +434,8 @@ fn write_read_i24_is_lossless() {
     let write_spec = WavSpec {
         channels: 16,
         sample_rate: 96000,
-        bits_per_sample: 24
+        bits_per_sample: 24,
+        sample_format: SampleFormat::Int,
     };
 
     // Write `i32` samples, but with at most 24 bits per sample.
