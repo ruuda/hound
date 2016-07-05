@@ -398,6 +398,16 @@ impl<R> WavReader<R> where R: io::Read {
             }
         }
 
+        // For WAVE_FORMAT_IEEE_FLOAT, the bits_per_sample field should be
+        // set to `32` according to
+        // https://msdn.microsoft.com/en-us/library/windows/hardware/ff538799(v=vs.85).aspx.
+        //
+        // Note that some applications support 64 bits per sample. This is
+        // not yet supported by hound.
+        if spec.bits_per_sample != 32 {
+            return Err(Error::FormatError("bits per sample is not 32"));
+        }
+
         let spec_ex = WavSpecEx {
             spec: WavSpec {
                 sample_format: SampleFormat::Float,
