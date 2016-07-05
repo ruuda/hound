@@ -445,8 +445,10 @@ impl<R> WavReader<R> where R: io::Read {
         let mut subformat = [0u8; 16];
         try!(reader.read_into(&mut subformat));
 
-        // Several GUIDS are defined. At the moment, only KSDATAFORMAT_SUBTYPE_PCM
-        // is supported (PCM audio with integer samples).
+        // Several GUIDS are defined. At the moment, only the following are supported:
+        //
+        // * KSDATAFORMAT_SUBTYPE_PCM (PCM audio with integer samples).
+        // * KSDATAFORMAT_SUBTYPE_IEEE_FLOAT (PCM audio with floating point samples).
         let sample_format = match subformat {
             super::KSDATAFORMAT_SUBTYPE_PCM => SampleFormat::Int,
             super::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT => SampleFormat::Float,
