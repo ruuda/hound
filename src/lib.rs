@@ -249,7 +249,9 @@ impl Sample for f32 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SampleFormat {
     /// Wave files with the `WAVE_FORMAT_IEEE_FLOAT` format tag store samples as floating point
-    /// values with a full scale of 1.0.
+    /// values.
+    ///
+    /// Values are normally in the range [-1.0, 1.0].
     Float,
     /// Wave files with the `WAVE_FORMAT_PCM` format tag store samples as integer values.
     Int,
