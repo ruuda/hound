@@ -57,8 +57,8 @@ Features
 |                 | Read                                                    | Write                   |
 |-----------------|---------------------------------------------------------|-------------------------|
 | Format          | `PCMWAVEFORMAT`, `WAVEFORMATEX`, `WAVEFORMATEXTENSIBLE` | `WAVEFORMATEXTENSIBLE`  |
-| Encoding        | PCM                                                     | PCM                     |
-| Bits per sample | 8, 16, 24, 32 (integer)                                 | 8, 16, 24, 32 (integer) |
+| Encoding        | Integer PCM, IEEE Float                                 | Integer PCM             |
+| Bits per sample | 8, 16, 24, 32 (integer), 32 (float)                     | 8, 16, 24, 32 (integer) |
 
 License
 -------
