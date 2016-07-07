@@ -821,6 +821,24 @@ fn read_wav_wave_format_ex_pcm() {
 }
 
 #[test]
+fn read_wav_wave_format_ex_ieee_float() {
+    let mut wav_reader = WavReader::open("testsamples/waveformatex-ieeefloat-44100Hz-mono.wav")
+                                   .unwrap();
+
+    assert_eq!(wav_reader.spec().channels, 1);
+    assert_eq!(wav_reader.spec().sample_rate, 44100);
+    assert_eq!(wav_reader.spec().bits_per_sample, 32);
+    assert_eq!(wav_reader.spec().sample_format, SampleFormat::Float);
+
+    let samples: Vec<f32> = wav_reader.samples()
+                                      .map(|r| r.unwrap())
+                                      .collect();
+
+    // The test file has been prepared with these exact four samples.
+    assert_eq!(&samples[..], &[2.0, 3.0, -16411.0, 1019.0]);
+}
+
+#[test]
 fn read_wav_stereo() {
     let mut wav_reader = WavReader::open("testsamples/waveformatex-16bit-44100Hz-stereo.wav")
                                    .unwrap();
