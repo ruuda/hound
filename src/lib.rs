@@ -309,11 +309,11 @@ pub enum Error {
     UnfinishedSample,
     /// The format is not supported.
     Unsupported,
-    /// The sample format is different to the destination format.
+    /// The sample format is different than the destination format.
     ///
     /// When iterating using the `samples` iterator, this means the destination
-    /// type (produced by the iterator) has a different sample format to that
-    /// which read from the wav file.
+    /// type (produced by the iterator) has a different sample format than the
+    /// samples in the wav file.
     ///
     /// For example, this will occur if the user attempts to produce `i32`
     /// samples (which have a `SampleFormat::Int`) from a wav file that
@@ -340,7 +340,7 @@ impl fmt::Display for Error {
                 formatter.write_str("The wave format of the file is not supported.")
             },
             Error::InvalidSampleFormat => {
-                formatter.write_str("The sample format is different to the destination format.")
+                formatter.write_str("The sample format differs from the destination format.")
             },
         }
     }
@@ -354,7 +354,7 @@ impl error::Error for Error {
             Error::TooWide => "the sample has more bits than the destination type",
             Error::UnfinishedSample => "the number of samples written is not a multiple of the number of channels",
             Error::Unsupported => "the wave format of the file is not supported",
-            Error::InvalidSampleFormat => "the sample format is different to th destination format",
+            Error::InvalidSampleFormat => "the sample format differs from the destination format",
         }
     }
 
