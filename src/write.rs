@@ -15,7 +15,7 @@ use std::io;
 use std::mem;
 use std::io::Write;
 use std::path;
-use super::{Error, Result, Sample, WavSpec};
+use super::{Error, Result, Sample, SampleFormat, WavSpec};
 
 /// Extends the functionality of `io::Write` with additional methods.
 ///
@@ -232,6 +232,11 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     /// sample to depends on previous writes. This will return an error if the
     /// sample does not fit in the number of bits specified in the `WavSpec`.
     pub fn write_sample<S: Sample>(&mut self, sample: S) -> Result<()> {
+        // For now, only the integer PCM format is supported for writing.
+        if self.spec.sample_format != SampleFormat::Int {
+            return Err(Error::Unsupported)
+        }
+
         if !self.wrote_header {
             try!(self.write_header());
             self.wrote_header = true;
@@ -335,8 +340,6 @@ fn short_write_should_signal_error() {
 
 #[test]
 fn wide_write_should_signal_error() {
-    use SampleFormat;
-
     let mut buffer = io::Cursor::new(Vec::new());
 
     let spec8 = WavSpec {
@@ -368,4 +371,21 @@ fn wide_write_should_signal_error() {
         assert!(writer.write_sample(8_388_607_i32).is_ok());
         assert!(writer.write_sample(8_388_608_i32).is_err());
     }
+}
+
+#[test]
+fn float_write_should_signal_error() {
+    let mut buffer = io::Cursor::new(Vec::new());
+
+    let spec_f32 = WavSpec {
+        channels: 1,
+        sample_rate: 44100,
+        bits_per_sample: 32,
+        sample_format: SampleFormat::Float,
+    };
+
+    // Writing the IEEE_FLOAT sample format is not yet supported, so this should
+    // signal an error, rather than producing corrupt output.
+    let mut writer = WavWriter::new(&mut buffer, spec_f32);
+    assert!(writer.write_sample(1.0).is_err());
 }
