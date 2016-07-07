@@ -636,6 +636,7 @@ where R: io::Read,
     if reader.samples_read < reader.num_samples {
         reader.samples_read += 1;
         let sample = Sample::read(&mut reader.reader,
+                                  reader.spec.sample_format,
                                   reader.bytes_per_sample,
                                   reader.spec.bits_per_sample);
         Some(sample.map_err(Error::from))

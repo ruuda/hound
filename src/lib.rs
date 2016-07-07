@@ -81,7 +81,7 @@ pub trait Sample: Sized {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()>;
 
     /// Reads the audio sample from the WAVE data chunk.
-    fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<Self>;
+    fn read<R: io::Read>(reader: &mut R, SampleFormat, bytes: u16, bits: u16) -> Result<Self>;
 }
 
 /// Converts an unsigned integer in the range 0-255 to a signed one in the range -128-127.
@@ -174,7 +174,10 @@ impl Sample for i8 {
         }
     }
 
-    fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<i8> {
+    fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<i8> {
+        if fmt != SampleFormat::Int {
+            return Err(Error::InvalidSampleFormat);
+        }
         match (bytes, bits) {
             (1, 8) => Ok(try!(reader.read_u8().map(signed_from_u8))),
             (n, _) if n > 1 => Err(Error::TooWide),
@@ -195,7 +198,10 @@ impl Sample for i16 {
         }
     }
 
-    fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<i16> {
+    fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<i16> {
+        if fmt != SampleFormat::Int {
+            return Err(Error::InvalidSampleFormat);
+        }
         match (bytes, bits) {
             (1, 8) => Ok(try!(reader.read_u8().map(signed_from_u8).map(|x| x as i16))),
             (2, 16) => Ok(try!(reader.read_le_i16())),
@@ -217,7 +223,10 @@ impl Sample for i32 {
         }
     }
 
-    fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<i32> {
+    fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<i32> {
+        if fmt != SampleFormat::Int {
+            return Err(Error::InvalidSampleFormat);
+        }
         match (bytes, bits) {
             (1, 8) => Ok(try!(reader.read_u8().map(signed_from_u8).map(|x| x as i32))),
             (2, 16) => Ok(try!(reader.read_le_i16().map(|x| x as i32))),
@@ -238,7 +247,10 @@ impl Sample for f32 {
         }
     }
 
-    fn read<R: io::Read>(reader: &mut R, bytes: u16, bits: u16) -> Result<Self> {
+    fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<Self> {
+        if fmt != SampleFormat::Float {
+            return Err(Error::InvalidSampleFormat);
+        }
         match (bytes, bits) {
             (4, 32) => Ok(try!(reader.read_le_f32())),
             (n, _) if n > 4 => Err(Error::TooWide),
@@ -296,7 +308,17 @@ pub enum Error {
     /// The number of samples written is not a multiple of the number of channels.
     UnfinishedSample,
     /// The format is not supported.
-    Unsupported
+    Unsupported,
+    /// The sample format is different to the destination format.
+    ///
+    /// When iterating using the `samples` iterator, this means the destination
+    /// type (produced by the iterator) has a different sample format to that
+    /// which read from the wav file.
+    ///
+    /// For example, this will occur if the user attempts to produce `i32`
+    /// samples (which have a `SampleFormat::Int`) from a wav file that
+    /// contains floating point data (`SampleFormat::Float`).
+    InvalidSampleFormat,
 }
 
 impl fmt::Display for Error {
@@ -316,7 +338,10 @@ impl fmt::Display for Error {
             },
             Error::Unsupported => {
                 formatter.write_str("The wave format of the file is not supported.")
-            }
+            },
+            Error::InvalidSampleFormat => {
+                formatter.write_str("The sample format is different to the destination format.")
+            },
         }
     }
 }
@@ -328,7 +353,8 @@ impl error::Error for Error {
             Error::FormatError(reason) => reason,
             Error::TooWide => "the sample has more bits than the destination type",
             Error::UnfinishedSample => "the number of samples written is not a multiple of the number of channels",
-            Error::Unsupported => "the wave format of the file is not supported"
+            Error::Unsupported => "the wave format of the file is not supported",
+            Error::InvalidSampleFormat => "the sample format is different to th destination format",
         }
     }
 
@@ -338,7 +364,8 @@ impl error::Error for Error {
             Error::FormatError(_) => None,
             Error::TooWide => None,
             Error::UnfinishedSample => None,
-            Error::Unsupported => None
+            Error::Unsupported => None,
+            Error::InvalidSampleFormat => None,
         }
     }
 }
