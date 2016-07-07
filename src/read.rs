@@ -928,3 +928,22 @@ fn wide_read_should_signal_error() {
     assert!(reader32.samples::<i16>().next().unwrap().is_err());
     assert!(reader32.samples::<i32>().next().unwrap().is_ok());
 }
+
+#[test]
+fn sample_format_mismatch_should_signal_error() {
+    let mut reader_f32 = WavReader::open("testsamples/waveformatex-ieeefloat-44100Hz-mono.wav")
+                                  .unwrap();
+
+    assert!(reader_f32.samples::<i8>().next().unwrap().is_err());
+    assert!(reader_f32.samples::<i16>().next().unwrap().is_err());
+    assert!(reader_f32.samples::<i32>().next().unwrap().is_err());
+    assert!(reader_f32.samples::<f32>().next().unwrap().is_ok());
+
+    let mut reader_i8 = WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav")
+                                  .unwrap();
+
+    assert!(reader_i8.samples::<i8>().next().unwrap().is_ok());
+    assert!(reader_i8.samples::<i16>().next().unwrap().is_ok());
+    assert!(reader_i8.samples::<i32>().next().unwrap().is_ok());
+    assert!(reader_i8.samples::<f32>().next().unwrap().is_err());
+}
