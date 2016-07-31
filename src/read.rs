@@ -909,6 +909,24 @@ fn read_wav_32bit() {
 }
 
 #[test]
+fn read_wav_wave_format_extensible_ieee_float() {
+    let mut wav_reader = WavReader::open("testsamples/waveformatextensible-ieeefloat-44100Hz-mono.wav")
+                                   .unwrap();
+
+    assert_eq!(wav_reader.spec().channels, 1);
+    assert_eq!(wav_reader.spec().sample_rate, 44100);
+    assert_eq!(wav_reader.spec().bits_per_sample, 32);
+    assert_eq!(wav_reader.spec().sample_format, SampleFormat::Float);
+
+    let samples: Vec<f32> = wav_reader.samples()
+                                      .map(|r| r.unwrap())
+                                      .collect();
+
+    // The test file has been prepared with these exact four samples.
+    assert_eq!(&samples[..], &[2.0, 3.0, -16411.0, 1019.0]);
+}
+
+#[test]
 fn wide_read_should_signal_error() {
     let mut reader24 = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
                                  .unwrap();
