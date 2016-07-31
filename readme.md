@@ -4,7 +4,7 @@ A wav encoding and decoding library in Rust.
 
 [![Build Status][ci-img]][ci]
 [![Crates.io version][crate-img]][crate]
-[Documentation][docs]
+[![Documentation][docs-img]][docs]
 
 Hound can read and write the WAVE audio format, an ubiquitous format for raw,
 uncompressed audio. The main motivation to write it was to test
@@ -72,7 +72,8 @@ to your copyright notice.
 [ci]:        https://travis-ci.org/ruuda/hound
 [crate-img]: http://img.shields.io/crates/v/hound.svg
 [crate]:     https://crates.io/crates/hound
-[docs]:      https://ruuda.github.io/hound/doc/v1.1.0/hound/
+[docs-img]:  http://img.shields.io/badge/docs-online-blue.svg
+[docs]:      https://ruuda.github.io/hound/doc/v2.0.0/hound/
 [claxon]:    https://github.com/ruuda/claxon
 [apache2]:   https://www.apache.org/licenses/LICENSE-2.0
 [exception]: https://www.gnu.org/licenses/gpl-faq.html#GPLIncompatibleLibs
