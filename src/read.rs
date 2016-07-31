@@ -574,6 +574,9 @@ impl<R> WavReader<R> where R: io::Read {
     /// 32 bits per sample can be decoded into an `i32`, but if you know
     /// beforehand that you will be reading a file with 16 bits per sample, you
     /// can save memory by decoding into an `i16`.
+    ///
+    /// The type of `S` (int or float) must match `spec().sample_format`,
+    /// otherwise every iteration will return an error.
     pub fn samples<'wr, S: Sample>(&'wr mut self) -> WavSamples<'wr, R, S> {
         WavSamples {
             reader: self,
