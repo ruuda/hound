@@ -102,10 +102,10 @@ fn u8_from_signed(x: i8) -> u8 {
 
 #[test]
 fn u8_sign_conversion_is_bijective() {
-    for x in 0 .. 255 {
+    for x in 0..255 {
         assert_eq!(x, u8_from_signed(signed_from_u8(x)));
     }
-    for x in -128 .. 127 {
+    for x in -128..127 {
         assert_eq!(x, signed_from_u8(u8_from_signed(x)));
     }
 }
@@ -170,7 +170,7 @@ impl Sample for i8 {
             16 => Ok(try!(writer.write_le_i16(self as i16))),
             24 => Ok(try!(writer.write_le_i24(self as i32))),
             32 => Ok(try!(writer.write_le_i32(self as i32))),
-            _ => Err(Error::Unsupported)
+            _ => Err(Error::Unsupported),
         }
     }
 
@@ -182,7 +182,7 @@ impl Sample for i8 {
             (1, 8) => Ok(try!(reader.read_u8().map(signed_from_u8))),
             (n, _) if n > 1 => Err(Error::TooWide),
             // TODO: add a genric decoder for any bit depth.
-            _ => Err(Error::Unsupported)
+            _ => Err(Error::Unsupported),
         }
     }
 }
@@ -194,7 +194,7 @@ impl Sample for i16 {
             16 => Ok(try!(writer.write_le_i16(self))),
             24 => Ok(try!(writer.write_le_i24(self as i32))),
             32 => Ok(try!(writer.write_le_i32(self as i32))),
-            _ => Err(Error::Unsupported)
+            _ => Err(Error::Unsupported),
         }
     }
 
@@ -207,7 +207,7 @@ impl Sample for i16 {
             (2, 16) => Ok(try!(reader.read_le_i16())),
             (n, _) if n > 2 => Err(Error::TooWide),
             // TODO: add a generic decoder for any bit depth.
-            _ => Err(Error::Unsupported)
+            _ => Err(Error::Unsupported),
         }
     }
 }
@@ -219,7 +219,7 @@ impl Sample for i32 {
             16 => Ok(try!(writer.write_le_i16(try!(narrow_to_i16(self))))),
             24 => Ok(try!(writer.write_le_i24(try!(narrow_to_i24(self))))),
             32 => Ok(try!(writer.write_le_i32(self))),
-            _ => Err(Error::Unsupported)
+            _ => Err(Error::Unsupported),
         }
     }
 
@@ -234,7 +234,7 @@ impl Sample for i32 {
             (4, 32) => Ok(try!(reader.read_le_i32())),
             (n, _) if n > 4 => Err(Error::TooWide),
             // TODO: add a generic decoder for any bit depth.
-            _ => Err(Error::Unsupported)
+            _ => Err(Error::Unsupported),
         }
     }
 }
@@ -322,26 +322,26 @@ pub enum Error {
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, formatter: &mut fmt::Formatter)
-           -> result::Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
         match *self {
             Error::IoError(ref err) => err.fmt(formatter),
             Error::FormatError(reason) => {
                 try!(formatter.write_str("Ill-formed WAVE file: "));
                 formatter.write_str(reason)
-            },
+            }
             Error::TooWide => {
                 formatter.write_str("The sample has more bits than the destination type.")
-            },
+            }
             Error::UnfinishedSample => {
-                formatter.write_str("The number of samples written is not a multiple of the number of channels.")
-            },
+                formatter.write_str(
+                    "The number of samples written is not a multiple of the number of channels.")
+            }
             Error::Unsupported => {
                 formatter.write_str("The wave format of the file is not supported.")
-            },
+            }
             Error::InvalidSampleFormat => {
                 formatter.write_str("The sample format differs from the destination format.")
-            },
+            }
         }
     }
 }
@@ -389,16 +389,12 @@ pub type Result<T> = result::Result<T, Error>;
 // last 8-byte section (which does contain a hyphen, for reasons unknown to me).
 
 /// Subformat type for PCM audio with integer samples.
-const KSDATAFORMAT_SUBTYPE_PCM: [u8; 16] = [0x01, 0x00, 0x00, 0x00,
-                                            0x00, 0x00, 0x10, 0x00,
-                                            0x80, 0x00, 0x00, 0xaa,
-                                            0x00, 0x38, 0x9b, 0x71];
+const KSDATAFORMAT_SUBTYPE_PCM: [u8; 16] = [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80,
+                                            0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71];
 
 /// Subformat type for IEEE_FLOAT audio with float samples.
-const KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: [u8; 16] = [0x03, 0x00, 0x00, 0x00,
-                                                   0x00, 0x00, 0x10, 0x00,
-                                                   0x80, 0x00, 0x00, 0xaa,
-                                                   0x00, 0x38, 0x9b, 0x71];
+const KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: [u8; 16] = [0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
+                                                   0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71];
 
 #[test]
 fn write_read_i16_is_lossless() {
@@ -412,7 +408,7 @@ fn write_read_i16_is_lossless() {
 
     {
         let mut writer = WavWriter::new(&mut buffer, write_spec);
-        for s in -1024_i16 .. 1024 {
+        for s in -1024_i16..1024 {
             writer.write_sample(s).unwrap();
         }
         writer.finalize().unwrap();
@@ -422,7 +418,7 @@ fn write_read_i16_is_lossless() {
         buffer.set_position(0);
         let mut reader = WavReader::new(&mut buffer).unwrap();
         assert_eq!(write_spec, reader.spec());
-        for (expected, read) in (-1024_i16 .. 1024).zip(reader.samples()) {
+        for (expected, read) in (-1024_i16..1024).zip(reader.samples()) {
             assert_eq!(expected, read.unwrap());
         }
     }
@@ -442,7 +438,7 @@ fn write_read_i8_is_lossless() {
     {
         let mut writer = WavWriter::new(&mut buffer, write_spec);
         // Iterate over i16 because we cannot specify the upper bound otherwise.
-        for s in -128_i16 .. 127 + 1 {
+        for s in -128_i16..127 + 1 {
             writer.write_sample(s as i8).unwrap();
         }
         writer.finalize().unwrap();
@@ -453,7 +449,7 @@ fn write_read_i8_is_lossless() {
         buffer.set_position(0);
         let mut reader = WavReader::new(&mut buffer).unwrap();
         assert_eq!(write_spec, reader.spec());
-        for (expected, read) in (-128_i16 .. 127 + 1).zip(reader.samples()) {
+        for (expected, read) in (-128_i16..127 + 1).zip(reader.samples()) {
             assert_eq!(expected, read.unwrap());
         }
     }
@@ -472,7 +468,7 @@ fn write_read_i24_is_lossless() {
     // Write `i32` samples, but with at most 24 bits per sample.
     {
         let mut writer = WavWriter::new(&mut buffer, write_spec);
-        for s in -128_i32 .. 127 + 1 {
+        for s in -128_i32..127 + 1 {
             writer.write_sample(s * 256 * 256).unwrap();
         }
         writer.finalize().unwrap();
@@ -484,8 +480,9 @@ fn write_read_i24_is_lossless() {
         buffer.set_position(0);
         let mut reader = WavReader::new(&mut buffer).unwrap();
         assert_eq!(write_spec, reader.spec());
-        for (expected, read) in (-128_i32 .. 127 + 1).map(|x| x * 256 * 256)
-                                                     .zip(reader.samples()) {
+        for (expected, read) in (-128_i32..127 + 1)
+            .map(|x| x * 256 * 256)
+            .zip(reader.samples()) {
             assert_eq!(expected, read.unwrap());
         }
     }

@@ -50,7 +50,9 @@ pub trait WriteExt: io::Write {
     fn write_le_f32(&mut self, x: f32) -> io::Result<()>;
 }
 
-impl<W> WriteExt for W where W: io::Write {
+impl<W> WriteExt for W
+    where W: io::Write
+{
     fn write_u8(&mut self, x: u8) -> io::Result<()> {
         let buf = [x];
         self.write_all(&buf)
@@ -100,7 +102,7 @@ impl<W> WriteExt for W where W: io::Write {
 
 /// Generates a bitmask with `channels` ones in the least significant bits.
 fn channel_mask(channels: u16) -> u32 {
-    (0 .. channels).map(|c| 1 << c).fold(0, |a, c| a | c)
+    (0..channels).map(|c| 1 << c).fold(0, |a, c| a | c)
 }
 
 #[test]
@@ -121,7 +123,9 @@ fn verify_channel_mask() {
 /// be done by calling `finalize`. If `finalize` is not called, the file will
 /// be finalized upon drop. However, finalization may fail, and without calling
 /// `finalize`, such a failure cannot be observed.
-pub struct WavWriter<W> where W: io::Write + io::Seek {
+pub struct WavWriter<W>
+    where W: io::Write + io::Seek
+{
     /// Specifies properties of the audio data.
     spec: WavSpec,
 
@@ -140,10 +144,12 @@ pub struct WavWriter<W> where W: io::Write + io::Seek {
     data_bytes_written: u32,
 
     /// Whether `finalize_internal` has been called.
-    finalized: bool
+    finalized: bool,
 }
 
-impl<W> WavWriter<W> where W: io::Write + io::Seek {
+impl<W> WavWriter<W>
+    where W: io::Write + io::Seek
+{
     /// Creates a writer that writes the WAVE format to the underlying writer.
     ///
     /// The underlying writer is assumed to be at offset 0. `WavWriter` employs
@@ -156,7 +162,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
             wrote_header: false,
             writer: io::BufWriter::new(writer),
             data_bytes_written: 0,
-            finalized: false
+            finalized: false,
         }
     }
 
@@ -234,7 +240,7 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     pub fn write_sample<S: Sample>(&mut self, sample: S) -> Result<()> {
         // For now, only the integer PCM format is supported for writing.
         if self.spec.sample_format != SampleFormat::Int {
-            return Err(Error::Unsupported)
+            return Err(Error::Unsupported);
         }
 
         if !self.wrote_header {
@@ -286,7 +292,9 @@ impl<W> WavWriter<W> where W: io::Write + io::Seek {
     }
 }
 
-impl<W> Drop for WavWriter<W> where W: io::Write + io::Seek {
+impl<W> Drop for WavWriter<W>
+    where W: io::Write + io::Seek
+{
     fn drop(&mut self) {
         // `finalize_internal` must be called only once. If that is done via
         // `finalize`, then this method is a no-op. If the user did not
@@ -304,8 +312,9 @@ impl WavWriter<io::BufWriter<fs::File>> {
     /// This is a convenience constructor that creates the file, wraps it in a
     /// `BufWriter`, and then constructs a `WavWriter` from it. The file will
     /// be overwritten if it exists.
-    pub fn create<P: AsRef<path::Path>>(filename: P, spec: WavSpec)
-           -> io::Result<WavWriter<io::BufWriter<fs::File>>> {
+    pub fn create<P: AsRef<path::Path>>(filename: P,
+                                        spec: WavSpec)
+                                        -> io::Result<WavWriter<io::BufWriter<fs::File>>> {
         let file = try!(fs::File::create(filename));
         let buf_writer = io::BufWriter::new(file);
         Ok(WavWriter::new(buf_writer, spec))
@@ -327,14 +336,14 @@ fn short_write_should_signal_error() {
 
     // Deliberately write one sample less than 17 * 5.
     let mut writer = WavWriter::new(&mut buffer, write_spec);
-    for s in 0 .. 17 * 5 - 1 {
+    for s in 0..17 * 5 - 1 {
         writer.write_sample(s as i16).unwrap();
     }
     let error = writer.finalize().err().unwrap();
 
     match error {
-        Error::UnfinishedSample => { },
-        _ => panic!("UnfinishedSample error should have been returned.")
+        Error::UnfinishedSample => {}
+        _ => panic!("UnfinishedSample error should have been returned."),
     }
 }
 
@@ -357,7 +366,7 @@ fn wide_write_should_signal_error() {
         assert!(writer.write_sample(128_i32).is_err());
     }
 
-    let spec16 = WavSpec { bits_per_sample: 16, .. spec8 };
+    let spec16 = WavSpec { bits_per_sample: 16, ..spec8 };
     {
         let mut writer = WavWriter::new(&mut buffer, spec16);
         assert!(writer.write_sample(32767_i16).is_ok());
@@ -365,7 +374,7 @@ fn wide_write_should_signal_error() {
         assert!(writer.write_sample(32768_i32).is_err());
     }
 
-    let spec24 = WavSpec { bits_per_sample: 24, .. spec8 };
+    let spec24 = WavSpec { bits_per_sample: 24, ..spec8 };
     {
         let mut writer = WavWriter::new(&mut buffer, spec24);
         assert!(writer.write_sample(8_388_607_i32).is_ok());
