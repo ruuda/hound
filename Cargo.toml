@@ -9,7 +9,7 @@ license = "Apache-2.0"
 readme = "readme.md"
 homepage = "https://github.com/ruuda/hound"
 repository = "https://github.com/ruuda/hound"
-documentation = "https://ruuda.github.io/hound/doc/v2.0.0/hound/"
+documentation = "https://docs.rs/crate/hound"
 
 [dev-dependencies]
 cpal = "0.1.2"
