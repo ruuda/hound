@@ -73,7 +73,7 @@ to your copyright notice.
 [crate-img]: http://img.shields.io/crates/v/hound.svg
 [crate]:     https://crates.io/crates/hound
 [docs-img]:  http://img.shields.io/badge/docs-online-blue.svg
-[docs]:      https://docs.rs/crate/hound
+[docs]:      https://docs.rs/hound
 [claxon]:    https://github.com/ruuda/claxon
 [apache2]:   https://www.apache.org/licenses/LICENSE-2.0
 [exception]: https://www.gnu.org/licenses/gpl-faq.html#GPLIncompatibleLibs
