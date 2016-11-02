@@ -263,6 +263,29 @@ impl<W> WavWriter<W>
         Ok(())
     }
 
+    /// Create a writer to write 16-bit integer samples only.
+    ///
+    /// When it is known what the kind of samples will be, it can be more
+    /// efficient to specialize for this code by writing via this writer.
+    /// This allows dynamic checks to be omitted.
+    /// 
+    /// # Panics
+    ///
+    /// Panics if the spec does not match 16 bits per sample and integer
+    /// sample format.
+    pub fn get_i16_writer<'s>(&'s mut self) -> SamplesWriter16<'s, W> {
+        if self.spec.sample_format != SampleFormat::Int {
+            panic!("When calling get_i16_writer, the sample format must be int.");
+        }
+        if self.spec.bits_per_sample != 16 {
+            panic!("When calling get_i16_writer, the number of bits per sample must be 16.");
+        }
+
+        SamplesWriter16 {
+            wav_writer: self
+        }
+    }
+
     /// Performs finalization. After calling this, the writer should be destructed.
     fn finalize_internal(&mut self) -> Result<()> {
         self.finalized = true;
@@ -327,6 +350,32 @@ impl WavWriter<io::BufWriter<fs::File>> {
         let file = try!(fs::File::create(filename));
         let buf_writer = io::BufWriter::new(file);
         WavWriter::new(buf_writer, spec)
+    }
+}
+
+/// A writer that specifically only writes samples of 16 bits per sample.
+pub struct SamplesWriter16<'parent, W> where W: io::Write + io::Seek + 'parent {
+    /// Like `WavWriter::writer`.
+    wav_writer: &'parent mut WavWriter<W>,
+}
+
+impl<'parent, W: io::Write + io::Seek> SamplesWriter16<'parent, W> {
+    /// Writes a single sample for one channel.
+    ///
+    /// WAVE interleaves channel data, so the channel that this writes the
+    /// sample to depends on previous writes.
+    ///
+    /// Unlike `WavWriter::write_sample()`, no bounds check is performed. Only
+    /// the least significant 16 bits are considered, everything else is
+    /// discarded.  Apart from that check, this method is more efficient than
+    /// `WavWriter::write_sample()`, because it can avoid dispatching on the
+    /// number of bits. That was done already when the `SamplesWriter16` was
+    /// constructed.
+    #[inline]
+    pub fn write_sample<S: Sample>(&mut self, sample: S) -> Result<()> {
+        try!(sample.write_i16(&mut self.wav_writer.writer));
+        self.wav_writer.data_bytes_written += 2;
+        Ok(())
     }
 }
 

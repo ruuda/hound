@@ -80,6 +80,11 @@ pub trait Sample: Sized {
     /// Writes the audio sample to the WAVE data chunk.
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()>;
 
+    /// Writes the least significant 16 bits to the WAVE data chunk.
+    ///
+    /// It is not verified whether the sample is in range.
+    fn write_i16<W: io::Write>(self, writer: &mut W) -> Result<()>;
+
     /// Reads the audio sample from the WAVE data chunk.
     fn read<R: io::Read>(reader: &mut R, SampleFormat, bytes: u16, bits: u16) -> Result<Self>;
 }
@@ -177,6 +182,11 @@ impl Sample for i8 {
         }
     }
 
+    #[inline(always)]
+    fn write_i16<W: io::Write>(self, writer: &mut W) -> Result<()> {
+        Ok(try!(writer.write_le_i16(self as i16)))
+    }
+
     fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<i8> {
         if fmt != SampleFormat::Int {
             return Err(Error::InvalidSampleFormat);
@@ -199,6 +209,11 @@ impl Sample for i16 {
             32 => Ok(try!(writer.write_le_i32(self as i32))),
             _ => Err(Error::Unsupported),
         }
+    }
+
+    #[inline(always)]
+    fn write_i16<W: io::Write>(self, writer: &mut W) -> Result<()> {
+        Ok(try!(writer.write_le_i16(self)))
     }
 
     fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<i16> {
@@ -226,6 +241,11 @@ impl Sample for i32 {
         }
     }
 
+    #[inline(always)]
+    fn write_i16<W: io::Write>(self, writer: &mut W) -> Result<()> {
+        Ok(try!(writer.write_le_i16(self as i16)))
+    }
+
     fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<i32> {
         if fmt != SampleFormat::Int {
             return Err(Error::InvalidSampleFormat);
@@ -248,6 +268,10 @@ impl Sample for f32 {
             32 => Ok(try!(writer.write_le_f32(self))),
             _ => Err(Error::Unsupported),
         }
+    }
+
+    fn write_i16<W: io::Write>(self, _: &mut W) -> Result<()> {
+        panic!("Calling write_i16 with an f32 is invalid.");
     }
 
     fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<Self> {
