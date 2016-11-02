@@ -53,15 +53,18 @@ pub trait WriteExt: io::Write {
 impl<W> WriteExt for W
     where W: io::Write
 {
+    #[inline(always)]
     fn write_u8(&mut self, x: u8) -> io::Result<()> {
         let buf = [x];
         self.write_all(&buf)
     }
 
+    #[inline(always)]
     fn write_le_i16(&mut self, x: i16) -> io::Result<()> {
         self.write_le_u16(x as u16)
     }
 
+    #[inline(always)]
     fn write_le_u16(&mut self, x: u16) -> io::Result<()> {
         let mut buf = [0u8; 2];
         buf[0] = (x & 0xff) as u8;
@@ -69,10 +72,12 @@ impl<W> WriteExt for W
         self.write_all(&buf)
     }
 
+    #[inline(always)]
     fn write_le_i24(&mut self, x: i32) -> io::Result<()> {
         self.write_le_u24(x as u32)
     }
 
+    #[inline(always)]
     fn write_le_u24(&mut self, x: u32) -> io::Result<()> {
         let mut buf = [0u8; 3];
         buf[0] = ((x >> 00) & 0xff) as u8;
@@ -81,10 +86,12 @@ impl<W> WriteExt for W
         self.write_all(&buf)
     }
 
+    #[inline(always)]
     fn write_le_i32(&mut self, x: i32) -> io::Result<()> {
         self.write_le_u32(x as u32)
     }
 
+    #[inline(always)]
     fn write_le_u32(&mut self, x: u32) -> io::Result<()> {
         let mut buf = [0u8; 4];
         buf[0] = ((x >> 00) & 0xff) as u8;
@@ -94,6 +101,7 @@ impl<W> WriteExt for W
         self.write_all(&buf)
     }
 
+    #[inline(always)]
     fn write_le_f32(&mut self, x: f32) -> io::Result<()> {
         let u = unsafe { mem::transmute(x) };
         self.write_le_u32(u)
@@ -238,6 +246,7 @@ impl<W> WavWriter<W>
     /// WAVE interleaves channel data, so the channel that this writes the
     /// sample to depends on previous writes. This will return an error if the
     /// sample does not fit in the number of bits specified in the `WavSpec`.
+    #[inline]
     pub fn write_sample<S: Sample>(&mut self, sample: S) -> Result<()> {
         // For now, only the integer PCM format is supported for writing.
         if self.spec.sample_format != SampleFormat::Int {

@@ -111,6 +111,7 @@ fn u8_sign_conversion_is_bijective() {
 }
 
 /// Tries to cast the sample to an 8-bit signed integer, returning an error on overflow.
+#[inline(always)]
 fn narrow_to_i8(x: i32) -> Result<i8> {
     use std::i8;
     if x < i8::MIN as i32 || x > i8::MAX as i32 {
@@ -129,6 +130,7 @@ fn verify_narrow_to_i8() {
 }
 
 /// Tries to cast the sample to a 16-bit signed integer, returning an error on overflow.
+#[inline(always)]
 fn narrow_to_i16(x: i32) -> Result<i16> {
     use std::i16;
     if x < i16::MIN as i32 || x > i16::MAX as i32 {
@@ -147,6 +149,7 @@ fn verify_narrow_to_i16() {
 }
 
 /// Tries to cast the sample to a 24-bit signed integer, returning an error on overflow.
+#[inline(always)]
 fn narrow_to_i24(x: i32) -> Result<i32> {
     if x < -(1 << 23) || x > (1 << 23) - 1 {
         Err(Error::TooWide)
