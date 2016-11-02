@@ -452,6 +452,37 @@ fn write_read_i16_is_lossless() {
 }
 
 #[test]
+fn write_read_i16_via_sample_writer_is_lossless() {
+    let mut buffer = io::Cursor::new(Vec::new());
+    let write_spec = WavSpec {
+        channels: 2,
+        sample_rate: 44100,
+        bits_per_sample: 16,
+        sample_format: SampleFormat::Int,
+    };
+
+    {
+        let mut writer = WavWriter::new(&mut buffer, write_spec).unwrap();
+        {
+            let mut sample_writer = writer.get_i16_writer();
+            for s in -1024_i16..1024 {
+                sample_writer.write_sample(s).unwrap();
+            }
+        }
+        writer.finalize().unwrap();
+    }
+
+    {
+        buffer.set_position(0);
+        let mut reader = WavReader::new(&mut buffer).unwrap();
+        assert_eq!(write_spec, reader.spec());
+        for (expected, read) in (-1024_i16..1024).zip(reader.samples()) {
+            assert_eq!(expected, read.unwrap());
+        }
+    }
+}
+
+#[test]
 fn write_read_i8_is_lossless() {
     let mut buffer = io::Cursor::new(Vec::new());
     let write_spec = WavSpec {
