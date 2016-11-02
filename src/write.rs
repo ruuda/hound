@@ -140,9 +140,6 @@ pub struct WavWriter<W>
     /// The (container) bytes per sample. This is the bit rate / 8 rounded up.
     bytes_per_sample: u16,
 
-    /// Whether the header has been written already.
-    wrote_header: bool,
-
     /// The writer that will be written to.
     writer: W,
 
@@ -164,15 +161,23 @@ impl<W> WavWriter<W>
     /// *no* buffering internally. It is recommended to wrap the writer in a
     /// `BufWriter` to avoid too many `write` calls. The `create()` constructor
     /// does this automatically.
-    pub fn new(writer: W, spec: WavSpec) -> WavWriter<W> {
-        WavWriter {
+    ///
+    /// This writes parts of the header immediately, hence a `Result` is
+    /// returned.
+    pub fn new(writer: W, spec: WavSpec) -> Result<WavWriter<W>> {
+        let mut writer = WavWriter {
             spec: spec,
             bytes_per_sample: (spec.bits_per_sample as f32 / 8.0).ceil() as u16,
-            wrote_header: false,
             writer: writer,
             data_bytes_written: 0,
             finalized: false,
-        }
+        };
+
+        // Write the header immediately. This way we don't have to check whether
+        // to write the header when writing samples.
+        try!(writer.write_header());
+
+        Ok(writer)
     }
 
     /// Writes the RIFF WAVE header
@@ -253,11 +258,6 @@ impl<W> WavWriter<W>
             return Err(Error::Unsupported);
         }
 
-        if !self.wrote_header {
-            try!(self.write_header());
-            self.wrote_header = true;
-        }
-
         try!(sample.write(&mut self.writer, self.spec.bits_per_sample));
         self.data_bytes_written += self.bytes_per_sample as u32;
         Ok(())
@@ -323,10 +323,10 @@ impl WavWriter<io::BufWriter<fs::File>> {
     /// be overwritten if it exists.
     pub fn create<P: AsRef<path::Path>>(filename: P,
                                         spec: WavSpec)
-                                        -> io::Result<WavWriter<io::BufWriter<fs::File>>> {
+                                        -> Result<WavWriter<io::BufWriter<fs::File>>> {
         let file = try!(fs::File::create(filename));
         let buf_writer = io::BufWriter::new(file);
-        Ok(WavWriter::new(buf_writer, spec))
+        WavWriter::new(buf_writer, spec)
     }
 }
 
@@ -344,7 +344,7 @@ fn short_write_should_signal_error() {
     };
 
     // Deliberately write one sample less than 17 * 5.
-    let mut writer = WavWriter::new(&mut buffer, write_spec);
+    let mut writer = WavWriter::new(&mut buffer, write_spec).unwrap();
     for s in 0..17 * 5 - 1 {
         writer.write_sample(s as i16).unwrap();
     }
@@ -367,7 +367,7 @@ fn wide_write_should_signal_error() {
         sample_format: SampleFormat::Int,
     };
     {
-        let mut writer = WavWriter::new(&mut buffer, spec8);
+        let mut writer = WavWriter::new(&mut buffer, spec8).unwrap();
         assert!(writer.write_sample(127_i8).is_ok());
         assert!(writer.write_sample(127_i16).is_ok());
         assert!(writer.write_sample(127_i32).is_ok());
@@ -377,7 +377,7 @@ fn wide_write_should_signal_error() {
 
     let spec16 = WavSpec { bits_per_sample: 16, ..spec8 };
     {
-        let mut writer = WavWriter::new(&mut buffer, spec16);
+        let mut writer = WavWriter::new(&mut buffer, spec16).unwrap();
         assert!(writer.write_sample(32767_i16).is_ok());
         assert!(writer.write_sample(32767_i32).is_ok());
         assert!(writer.write_sample(32768_i32).is_err());
@@ -385,7 +385,7 @@ fn wide_write_should_signal_error() {
 
     let spec24 = WavSpec { bits_per_sample: 24, ..spec8 };
     {
-        let mut writer = WavWriter::new(&mut buffer, spec24);
+        let mut writer = WavWriter::new(&mut buffer, spec24).unwrap();
         assert!(writer.write_sample(8_388_607_i32).is_ok());
         assert!(writer.write_sample(8_388_608_i32).is_err());
     }
@@ -404,6 +404,6 @@ fn float_write_should_signal_error() {
 
     // Writing the IEEE_FLOAT sample format is not yet supported, so this should
     // signal an error, rather than producing corrupt output.
-    let mut writer = WavWriter::new(&mut buffer, spec_f32);
+    let mut writer = WavWriter::new(&mut buffer, spec_f32).unwrap();
     assert!(writer.write_sample(1.0).is_err());
 }

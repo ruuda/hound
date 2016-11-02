@@ -410,7 +410,7 @@ fn write_read_i16_is_lossless() {
     };
 
     {
-        let mut writer = WavWriter::new(&mut buffer, write_spec);
+        let mut writer = WavWriter::new(&mut buffer, write_spec).unwrap();
         for s in -1024_i16..1024 {
             writer.write_sample(s).unwrap();
         }
@@ -439,7 +439,7 @@ fn write_read_i8_is_lossless() {
 
     // Write `i8` samples.
     {
-        let mut writer = WavWriter::new(&mut buffer, write_spec);
+        let mut writer = WavWriter::new(&mut buffer, write_spec).unwrap();
         // Iterate over i16 because we cannot specify the upper bound otherwise.
         for s in -128_i16..127 + 1 {
             writer.write_sample(s as i8).unwrap();
@@ -470,7 +470,7 @@ fn write_read_i24_is_lossless() {
 
     // Write `i32` samples, but with at most 24 bits per sample.
     {
-        let mut writer = WavWriter::new(&mut buffer, write_spec);
+        let mut writer = WavWriter::new(&mut buffer, write_spec).unwrap();
         for s in -128_i32..127 + 1 {
             writer.write_sample(s * 256 * 256).unwrap();
         }
