@@ -136,7 +136,7 @@ pub struct WavWriter<W>
     wrote_header: bool,
 
     /// The writer that will be written to.
-    writer: io::BufWriter<W>,
+    writer: W,
 
     /// The number of bytes written to the data section.
     ///
@@ -153,14 +153,15 @@ impl<W> WavWriter<W>
     /// Creates a writer that writes the WAVE format to the underlying writer.
     ///
     /// The underlying writer is assumed to be at offset 0. `WavWriter` employs
-    /// buffering internally to avoid too many `write` calls to the underlying
-    /// writer.
+    /// *no* buffering internally. It is recommended to wrap the writer in a
+    /// `BufWriter` to avoid too many `write` calls. The `create()` constructor
+    /// does this automatically.
     pub fn new(writer: W, spec: WavSpec) -> WavWriter<W> {
         WavWriter {
             spec: spec,
             bytes_per_sample: (spec.bits_per_sample as f32 / 8.0).ceil() as u16,
             wrote_header: false,
-            writer: io::BufWriter::new(writer),
+            writer: writer,
             data_bytes_written: 0,
             finalized: false,
         }
@@ -262,14 +263,13 @@ impl<W> WavWriter<W>
 
         // Extract the underlying writer and rewind it to the start, to update
         // the header fields of which we now know the value.
-        let mut writer = self.writer.get_mut();
 
         // The header minus magic and 32-bit filesize is 60 bytes long.
         let file_size = self.data_bytes_written + 60;
-        try!(writer.seek(io::SeekFrom::Start(4)));
-        try!(writer.write_le_u32(file_size));
-        try!(writer.seek(io::SeekFrom::Start(64)));
-        try!(writer.write_le_u32(self.data_bytes_written));
+        try!(self.writer.seek(io::SeekFrom::Start(4)));
+        try!(self.writer.write_le_u32(file_size));
+        try!(self.writer.seek(io::SeekFrom::Start(64)));
+        try!(self.writer.write_le_u32(self.data_bytes_written));
 
         // Signal error if the last sample was not finished, but do so after
         // everything has been written, so that no data is lost, even though
