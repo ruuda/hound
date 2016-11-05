@@ -80,13 +80,15 @@ pub trait Sample: Sized {
     /// Writes the audio sample to the WAVE data chunk.
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()>;
 
-    /// Writes the least significant 16 bits to the WAVE data chunk.
-    ///
-    /// It is not verified whether the sample is in range.
-    fn write_i16<W: io::Write>(self, writer: &mut W) -> Result<()>;
-
     /// Reads the audio sample from the WAVE data chunk.
     fn read<R: io::Read>(reader: &mut R, SampleFormat, bytes: u16, bits: u16) -> Result<Self>;
+
+    /// Cast the sample to a 16-bit sample.
+    ///
+    /// This does not change the value of the sample, it only casts it. The
+    /// value is assumed to fit within the range. This is not verified,
+    /// truncation may occur.
+    fn as_i16(self) -> i16;
 }
 
 /// Converts an unsigned integer in the range 0-255 to a signed one in the range -128-127.
@@ -183,8 +185,8 @@ impl Sample for i8 {
     }
 
     #[inline(always)]
-    fn write_i16<W: io::Write>(self, writer: &mut W) -> Result<()> {
-        Ok(try!(writer.write_le_i16(self as i16)))
+    fn as_i16(self) -> i16 {
+        self as i16
     }
 
     fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<i8> {
@@ -212,8 +214,8 @@ impl Sample for i16 {
     }
 
     #[inline(always)]
-    fn write_i16<W: io::Write>(self, writer: &mut W) -> Result<()> {
-        Ok(try!(writer.write_le_i16(self)))
+    fn as_i16(self) -> i16 {
+        self
     }
 
     fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<i16> {
@@ -242,8 +244,8 @@ impl Sample for i32 {
     }
 
     #[inline(always)]
-    fn write_i16<W: io::Write>(self, writer: &mut W) -> Result<()> {
-        Ok(try!(writer.write_le_i16(self as i16)))
+    fn as_i16(self) -> i16 {
+        self as i16
     }
 
     fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<i32> {
@@ -270,8 +272,8 @@ impl Sample for f32 {
         }
     }
 
-    fn write_i16<W: io::Write>(self, _: &mut W) -> Result<()> {
-        panic!("Calling write_i16 with an f32 is invalid.");
+    fn as_i16(self) -> i16 {
+        panic!("Calling as_i16 with an f32 is invalid.");
     }
 
     fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<Self> {
@@ -445,6 +447,7 @@ fn write_read_i16_is_lossless() {
         buffer.set_position(0);
         let mut reader = WavReader::new(&mut buffer).unwrap();
         assert_eq!(write_spec, reader.spec());
+        assert_eq!(reader.len(), 2048);
         for (expected, read) in (-1024_i16..1024).zip(reader.samples()) {
             assert_eq!(expected, read.unwrap());
         }
@@ -464,10 +467,11 @@ fn write_read_i16_via_sample_writer_is_lossless() {
     {
         let mut writer = WavWriter::new(&mut buffer, write_spec).unwrap();
         {
-            let mut sample_writer = writer.get_i16_writer();
+            let mut sample_writer = writer.get_i16_writer(2048);
             for s in -1024_i16..1024 {
-                sample_writer.write_sample(s).unwrap();
+                sample_writer.write_sample(s);
             }
+            sample_writer.flush().unwrap();
         }
         writer.finalize().unwrap();
     }
@@ -476,6 +480,7 @@ fn write_read_i16_via_sample_writer_is_lossless() {
         buffer.set_position(0);
         let mut reader = WavReader::new(&mut buffer).unwrap();
         assert_eq!(write_spec, reader.spec());
+        assert_eq!(reader.len(), 2048);
         for (expected, read) in (-1024_i16..1024).zip(reader.samples()) {
             assert_eq!(expected, read.unwrap());
         }
@@ -507,6 +512,7 @@ fn write_read_i8_is_lossless() {
         buffer.set_position(0);
         let mut reader = WavReader::new(&mut buffer).unwrap();
         assert_eq!(write_spec, reader.spec());
+        assert_eq!(reader.len(), 256);
         for (expected, read) in (-128_i16..127 + 1).zip(reader.samples()) {
             assert_eq!(expected, read.unwrap());
         }
@@ -538,6 +544,7 @@ fn write_read_i24_is_lossless() {
         buffer.set_position(0);
         let mut reader = WavReader::new(&mut buffer).unwrap();
         assert_eq!(write_spec, reader.spec());
+        assert_eq!(reader.len(), 256);
         for (expected, read) in (-128_i32..127 + 1)
             .map(|x| x * 256 * 256)
             .zip(reader.samples()) {

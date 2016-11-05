@@ -268,12 +268,19 @@ impl<W> WavWriter<W>
     /// When it is known what the kind of samples will be, it can be more
     /// efficient to specialize for this code by writing via this writer.
     /// This allows dynamic checks to be omitted.
+    ///
+    /// Furthermore, this writer employs buffering internally, which allows
+    /// omitting return value checks except on flush. The internal buffer will
+    /// be sized such that at least `num_samples_hint` samples can be written to
+    /// it without reallocating.
     /// 
     /// # Panics
     ///
     /// Panics if the spec does not match 16 bits per sample and integer
     /// sample format.
-    pub fn get_i16_writer<'s>(&'s mut self) -> SampleWriter16<'s, W> {
+    pub fn get_i16_writer<'s>(&'s mut self,
+                              num_samples_hint: u32)
+                              -> SampleWriter16<'s, W> {
         if self.spec.sample_format != SampleFormat::Int {
             panic!("When calling get_i16_writer, the sample format must be int.");
         }
@@ -282,7 +289,8 @@ impl<W> WavWriter<W>
         }
 
         SampleWriter16 {
-            wav_writer: self
+            wav_writer: self,
+            buffer: Vec::with_capacity(num_samples_hint as usize * 2),
         }
     }
 
@@ -354,9 +362,22 @@ impl WavWriter<io::BufWriter<fs::File>> {
 }
 
 /// A writer that specifically only writes samples of 16 bits per sample.
+///
+/// The writer buffers written data internally so they can be written in a
+/// single batch later on. This has two advantages:
+///
+///  * There is no need for error handling during writing, only on flush. This
+///    eliminates a lot of branches.
+///  * The buffer can be written once, which reduces the overhead of the write
+///    call. Because writing to an `io::BufWriter` is implemented with a
+///    `memcpy`, there is a large overhead to writing small amounts of data
+///    such as a 16-bit sample.
 pub struct SampleWriter16<'parent, W> where W: io::Write + io::Seek + 'parent {
-    /// Like `WavWriter::writer`.
+    /// The wrapped WAV writer.
     wav_writer: &'parent mut WavWriter<W>,
+
+    /// The internal buffer that samples are written to before they are flushed.
+    buffer: Vec<u8>,
 }
 
 impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
@@ -371,10 +392,22 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
     /// `WavWriter::write_sample()`, because it can avoid dispatching on the
     /// number of bits. That was done already when the `SampleWriter16` was
     /// constructed.
-    #[inline]
-    pub fn write_sample<S: Sample>(&mut self, sample: S) -> Result<()> {
-        try!(sample.write_i16(&mut self.wav_writer.writer));
-        self.wav_writer.data_bytes_written += 2;
+    ///
+    /// Note: nothing is actually written until `flush()` is called.
+    #[inline(always)]
+    pub fn write_sample<S: Sample>(&mut self, sample: S) {
+        let s = sample.as_i16() as u16;
+
+        // Write the number in little endian order to the buffer.
+        self.buffer.push(s as u8);
+        self.buffer.push((s >> 8) as u8);
+    }
+
+    /// Flush the internal buffer to the underlying writer.
+    pub fn flush(&mut self) -> Result<()> {
+        try!(self.wav_writer.writer.write_all(&self.buffer));
+        self.wav_writer.data_bytes_written += self.buffer.len() as u32;
+        self.buffer.clear();
         Ok(())
     }
 }
