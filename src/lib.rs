@@ -478,7 +478,7 @@ fn write_read_i16_via_sample_writer_is_lossless() {
             {
                 let mut sample_writer = writer.get_i16_writer(1024);
                 for s in 0i16..1024 {
-                    sample_writer.write_sample(s);
+                    unsafe { sample_writer.write_sample_unchecked(s); }
                 }
                 sample_writer.flush().unwrap();
             }

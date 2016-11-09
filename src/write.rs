@@ -441,6 +441,22 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
         self.index += 2;
     }
 
+    /// Like `write_sample()`, but does not perform a bounds check.
+    ///
+    /// It is the responsibility of the programmer that no more samples are
+    /// written than allocated when the writer was created.
+    #[inline(always)]
+    pub unsafe fn write_sample_unchecked<S: Sample>(&mut self, sample: S) {
+        let s = sample.as_i16() as u16;
+
+        // Write the sample in little endian to the buffer.
+        let idx = self.index as usize;
+        *self.buffer.get_unchecked_mut(idx) = s as u8;
+        *self.buffer.get_unchecked_mut(idx + 1) = (s >> 8) as u8;
+
+        self.index += 2;
+    }
+
     /// Flush the internal buffer to the underlying writer.
     ///
     /// # Panics
