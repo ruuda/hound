@@ -467,11 +467,21 @@ fn write_read_i16_via_sample_writer_is_lossless() {
     {
         let mut writer = WavWriter::new(&mut buffer, write_spec).unwrap();
         {
-            let mut sample_writer = writer.get_i16_writer(2048);
-            for s in -1024_i16..1024 {
-                sample_writer.write_sample(s);
+            {
+                let mut sample_writer = writer.get_i16_writer(1024);
+                for s in -1024_i16..0 {
+                    sample_writer.write_sample(s);
+                }
+                sample_writer.flush().unwrap();
             }
-            sample_writer.flush().unwrap();
+
+            {
+                let mut sample_writer = writer.get_i16_writer(1024);
+                for s in 0i16..1024 {
+                    sample_writer.write_sample(s);
+                }
+                sample_writer.flush().unwrap();
+            }
         }
         writer.finalize().unwrap();
     }

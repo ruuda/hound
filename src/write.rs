@@ -150,6 +150,10 @@ pub struct WavWriter<W>
 
     /// Whether `finalize_internal` has been called.
     finalized: bool,
+
+    /// The buffer for the sample writer, which is recycled throughout calls to
+    /// avoid allocating frequently.
+    sample_writer_buffer: Vec<u8>,
 }
 
 impl<W> WavWriter<W>
@@ -170,6 +174,7 @@ impl<W> WavWriter<W>
             bytes_per_sample: (spec.bits_per_sample as f32 / 8.0).ceil() as u16,
             writer: writer,
             data_bytes_written: 0,
+            sample_writer_buffer: Vec::new(),
             finalized: false,
         };
 
@@ -271,15 +276,18 @@ impl<W> WavWriter<W>
     ///
     /// Furthermore, this writer employs buffering internally, which allows
     /// omitting return value checks except on flush. The internal buffer will
-    /// be sized such that at least `num_samples_hint` samples can be written to
-    /// it without reallocating.
-    /// 
+    /// be sized such that at least `num_samples` samples can be written to it,
+    /// and the buffer is recycled across calls to `get_i16_writer()`.
+    ///
     /// # Panics
     ///
     /// Panics if the spec does not match 16 bits per sample and integer
     /// sample format.
+    ///
+    /// Attempting to write more than `num_samples` samples to the writer will
+    /// panic too.
     pub fn get_i16_writer<'s>(&'s mut self,
-                              num_samples_hint: u32)
+                              num_samples: u32)
                               -> SampleWriter16<'s, W> {
         if self.spec.sample_format != SampleFormat::Int {
             panic!("When calling get_i16_writer, the sample format must be int.");
@@ -288,9 +296,27 @@ impl<W> WavWriter<W>
             panic!("When calling get_i16_writer, the number of bits per sample must be 16.");
         }
 
+        let num_bytes = num_samples as usize * 2;
+
+        if self.sample_writer_buffer.len() < num_bytes {
+            // We need a bigger buffer. There is no point in growing the old
+            // one, as we are going to overwrite the samples anyway, so just
+            // allocate a new one.
+            let mut new_buffer = Vec::with_capacity(num_bytes);
+
+            // The potentially garbage memory here will not be exposed: the
+            // buffer is only exposed when flushing, but `flush()` asserts that
+            // all samples have been written.
+            unsafe { new_buffer.set_len(num_bytes); }
+
+            self.sample_writer_buffer = new_buffer;
+        }
+
         SampleWriter16 {
-            wav_writer: self,
-            buffer: Vec::with_capacity(num_samples_hint as usize * 2),
+            writer: &mut self.writer,
+            buffer: &mut self.sample_writer_buffer[..num_bytes],
+            data_bytes_written: &mut self.data_bytes_written,
+            index: 0,
         }
     }
 
@@ -371,13 +397,20 @@ impl WavWriter<io::BufWriter<fs::File>> {
 ///  * The buffer can be written once, which reduces the overhead of the write
 ///    call. Because writing to an `io::BufWriter` is implemented with a
 ///    `memcpy`, there is a large overhead to writing small amounts of data
-///    such as a 16-bit sample.
+///    such as a 16-bit sample. By writing large blocks (or by not using
+///    `BufWriter`) this overhead can be avoided.
 pub struct SampleWriter16<'parent, W> where W: io::Write + io::Seek + 'parent {
-    /// The wrapped WAV writer.
-    wav_writer: &'parent mut WavWriter<W>,
+    /// The writer borrowed from the wrapped WavWriter.
+    writer: &'parent mut W,
 
     /// The internal buffer that samples are written to before they are flushed.
-    buffer: Vec<u8>,
+    buffer: &'parent mut [u8],
+
+    /// Reference to the `data_bytes_written` field of the writer.
+    data_bytes_written: &'parent mut u32,
+
+    /// The index into the buffer where the next bytes will be written.
+    index: u32,
 }
 
 impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
@@ -396,18 +429,30 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
     /// Note: nothing is actually written until `flush()` is called.
     #[inline(always)]
     pub fn write_sample<S: Sample>(&mut self, sample: S) {
+        assert!((self.index as usize) <= self.buffer.len() - 2,
+          "Trying to write more samples than reserved for the sample writer.");
+
         let s = sample.as_i16() as u16;
 
-        // Write the number in little endian order to the buffer.
-        self.buffer.push(s as u8);
-        self.buffer.push((s >> 8) as u8);
+        // Write the sample in little endian to the buffer.
+        self.buffer[self.index as usize] = s as u8;
+        self.buffer[self.index as usize + 1] = (s >> 8) as u8;
+
+        self.index += 2;
     }
 
     /// Flush the internal buffer to the underlying writer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if insufficient samples (less than specified when the writer was
+    /// constructed) have been written with `write_sample()`.
     pub fn flush(&mut self) -> Result<()> {
-        try!(self.wav_writer.writer.write_all(&self.buffer));
-        self.wav_writer.data_bytes_written += self.buffer.len() as u32;
-        self.buffer.clear();
+        assert_eq!(self.index as usize, self.buffer.len(),
+            "Insufficient samples written to the sample writer.");
+
+        try!(self.writer.write_all(&self.buffer));
+        *self.data_bytes_written += self.buffer.len() as u32;
         Ok(())
     }
 }
