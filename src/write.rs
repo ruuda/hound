@@ -441,19 +441,31 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
         self.index += 2;
     }
 
+    #[cfg(target_arch = "x86_64")]
+    unsafe fn write_u16_le_unchecked(&mut self, value: u16) {
+        // x86_64 is little endian, so we do not need to shuffle bytes around;
+        // we can just store the 16-bit integer in the buffer directly.
+        use std::mem;
+        let ptr: *mut u16 = mem::transmute(self.buffer.get_unchecked_mut(self.index as usize));
+        *ptr = value;
+    }
+
+    #[cfg(not(target_arch = "x86_64"))]
+    unsafe fn write_u16_le_unchecked(&mut self, value: u16) {
+        // Write a sample in little-endian to the buffer, independent of the
+        // endianness of the architecture we are running on.
+        let idx = self.index as usize;
+        *self.buffer.get_unchecked_mut(idx) = value as u8;
+        *self.buffer.get_unchecked_mut(idx + 1) = (value >> 8) as u8;
+    }
+
     /// Like `write_sample()`, but does not perform a bounds check.
     ///
     /// It is the responsibility of the programmer that no more samples are
     /// written than allocated when the writer was created.
     #[inline(always)]
     pub unsafe fn write_sample_unchecked<S: Sample>(&mut self, sample: S) {
-        let s = sample.as_i16() as u16;
-
-        // Write the sample in little endian to the buffer.
-        let idx = self.index as usize;
-        *self.buffer.get_unchecked_mut(idx) = s as u8;
-        *self.buffer.get_unchecked_mut(idx + 1) = (s >> 8) as u8;
-
+        self.write_u16_le_unchecked(sample.as_i16() as u16);
         self.index += 2;
     }
 
