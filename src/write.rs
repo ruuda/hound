@@ -475,7 +475,7 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
     ///
     /// Panics if insufficient samples (less than specified when the writer was
     /// constructed) have been written with `write_sample()`.
-    pub fn flush(&mut self) -> Result<()> {
+    pub fn flush(self) -> Result<()> {
         if self.index as usize != self.buffer.len() {
             panic!("Insufficient samples written to the sample writer.");
         }
