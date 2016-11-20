@@ -66,7 +66,7 @@ mod read;
 mod write;
 
 pub use read::{WavReader, WavIntoSamples, WavSamples};
-pub use write::WavWriter;
+pub use write::{SampleWriter16, WavWriter};
 
 /// A type that can be used to represent audio samples.
 ///
