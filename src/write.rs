@@ -268,16 +268,14 @@ impl<W> WavWriter<W>
         Ok(())
     }
 
-    /// Create a writer to write 16-bit integer samples only.
+    /// Create an efficient writer that write 16-bit integer samples only.
     ///
-    /// When it is known what the kind of samples will be, it can be more
-    /// efficient to specialize for this code by writing via this writer.
-    /// This allows dynamic checks to be omitted.
-    ///
-    /// Furthermore, this writer employs buffering internally, which allows
-    /// omitting return value checks except on flush. The internal buffer will
-    /// be sized such that at least `num_samples` samples can be written to it,
-    /// and the buffer is recycled across calls to `get_i16_writer()`.
+    /// When it is known what the kind of samples will be, many dynamic checks
+    /// can be omitted. Furthermore, this writer employs buffering internally,
+    /// which allows omitting return value checks except on flush. The internal
+    /// buffer will be sized such that at least `num_samples` samples can be
+    /// written to it, and the buffer is recycled across calls to
+    /// `get_i16_writer()`.
     ///
     /// # Panics
     ///
@@ -387,10 +385,11 @@ impl WavWriter<io::BufWriter<fs::File>> {
     }
 }
 
-/// A writer that specifically only writes samples of 16 bits per sample.
+/// A writer that specifically only writes integer samples of 16 bits per sample.
 ///
-/// The writer buffers written data internally so they can be written in a
-/// single batch later on. This has two advantages:
+/// The writer buffers written samples internally so they can be written in a
+/// single batch later on. This has two advantages when performance is
+/// important:
 ///
 ///  * There is no need for error handling during writing, only on flush. This
 ///    eliminates a lot of branches.
@@ -399,6 +398,9 @@ impl WavWriter<io::BufWriter<fs::File>> {
 ///    `memcpy`, there is a large overhead to writing small amounts of data
 ///    such as a 16-bit sample. By writing large blocks (or by not using
 ///    `BufWriter`) this overhead can be avoided.
+///
+/// A `SampleWriter16` can be obtained by calling [`WavWriter::get_i16_writer`](
+/// struct.WavWriter.html#method.get_i16_writer).
 pub struct SampleWriter16<'parent, W> where W: io::Write + io::Seek + 'parent {
     /// The writer borrowed from the wrapped WavWriter.
     writer: &'parent mut W,
@@ -419,14 +421,14 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
     /// WAVE interleaves channel data, so the channel that this writes the
     /// sample to depends on previous writes.
     ///
-    /// Unlike `WavWriter::write_sample()`, no bounds check is performed. Only
+    /// Unlike `WavWriter::write_sample()`, no range check is performed. Only
     /// the least significant 16 bits are considered, everything else is
     /// discarded.  Apart from that check, this method is more efficient than
     /// `WavWriter::write_sample()`, because it can avoid dispatching on the
     /// number of bits. That was done already when the `SampleWriter16` was
     /// constructed.
     ///
-    /// Note: nothing is actually written until `flush()` is called.
+    /// Note that nothing is actually written until `flush()` is called.
     #[inline(always)]
     pub fn write_sample<S: Sample>(&mut self, sample: S) {
         assert!((self.index as usize) <= self.buffer.len() - 2,
@@ -459,7 +461,8 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
         *self.buffer.get_unchecked_mut(idx + 1) = (value >> 8) as u8;
     }
 
-    /// Like `write_sample()`, but does not perform a bounds check.
+    /// Like `write_sample()`, but does not perform a bounds check when writing
+    /// to the internal buffer.
     ///
     /// It is the responsibility of the programmer that no more samples are
     /// written than allocated when the writer was created.
