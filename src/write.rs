@@ -268,19 +268,18 @@ impl<W> WavWriter<W>
         Ok(())
     }
 
-    /// Create an efficient writer that write 16-bit integer samples only.
+    /// Create an efficient writer that writes 16-bit integer samples only.
     ///
     /// When it is known what the kind of samples will be, many dynamic checks
     /// can be omitted. Furthermore, this writer employs buffering internally,
     /// which allows omitting return value checks except on flush. The internal
-    /// buffer will be sized such that at least `num_samples` samples can be
+    /// buffer will be sized such that exactly `num_samples` samples can be
     /// written to it, and the buffer is recycled across calls to
-    /// `get_i16_writer()`.
+    /// `get_i16_writer()` if the previous buffer was sufficiently large.
     ///
     /// # Panics
     ///
-    /// Panics if the spec does not match 16 bits per sample and integer
-    /// sample format.
+    /// Panics if the spec does not match a 16 bits per sample integer format.
     ///
     /// Attempting to write more than `num_samples` samples to the writer will
     /// panic too.
@@ -395,9 +394,9 @@ impl WavWriter<io::BufWriter<fs::File>> {
 ///    eliminates a lot of branches.
 ///  * The buffer can be written once, which reduces the overhead of the write
 ///    call. Because writing to an `io::BufWriter` is implemented with a
-///    `memcpy`, there is a large overhead to writing small amounts of data
-///    such as a 16-bit sample. By writing large blocks (or by not using
-///    `BufWriter`) this overhead can be avoided.
+///    `memcpy` (even for single bytes), there is a large overhead to writing
+///    small amounts of data such as a 16-bit sample. By writing large blocks
+///    (or by not using `BufWriter`) this overhead can be avoided.
 ///
 /// A `SampleWriter16` can be obtained by calling [`WavWriter::get_i16_writer`](
 /// struct.WavWriter.html#method.get_i16_writer).
@@ -464,8 +463,8 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
     /// Like `write_sample()`, but does not perform a bounds check when writing
     /// to the internal buffer.
     ///
-    /// It is the responsibility of the programmer that no more samples are
-    /// written than allocated when the writer was created.
+    /// It is the responsibility of the programmer to ensure that no more
+    /// samples are written than allocated when the writer was created.
     #[inline(always)]
     pub unsafe fn write_sample_unchecked<S: Sample>(&mut self, sample: S) {
         self.write_u16_le_unchecked(sample.as_i16() as u16);
