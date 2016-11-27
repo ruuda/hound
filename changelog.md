@@ -1,6 +1,24 @@
 Changelog
 =========
 
+3.0.0
+-----
+
+This release focuses on improving write performance. Highlights:
+
+- The header is now written when a `WavWriter` is constructed, therefore
+  the constructor now returns a `Result`. This is a breaking change.
+- `WavWriter` no longer maintains a buffer internally.
+  `WavWriter::create()` does still wrap the file it opens in a buffered
+  writer.
+- Adds `SampleWriter16` for fast writing of 16-bit samples. Dedicated
+  writers for other bit depths might be added in future releases.
+
+Upgrading requires dealing with the `Result` in `WavWriter::new()`
+and `WavWriter::create()`. In many cases this should be as simple as
+wrapping the call in a `try!()`, or appending a `?` on recent versions
+of Rust.
+
 2.0.0
 -----
 
