@@ -5,11 +5,15 @@ version = "3.0.0"
 authors = ["Ruud van Asseldonk <dev@veniogames.com>"]
 description = "A wav encoding and decoding library"
 keywords = ["wav", "wave", "audio", "codec"]
+categories = ["multimedia::encoding", "multimedia::audio"]
 license = "Apache-2.0"
 readme = "readme.md"
 homepage = "https://github.com/ruuda/hound"
 repository = "https://github.com/ruuda/hound"
 documentation = "https://docs.rs/hound"
+
+[badges]
+travis-ci = { repository = "ruuda/hound", branch = "v3.0.0" }
 
 [dev-dependencies]
 cpal = "0.1.2"
