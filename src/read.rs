@@ -348,6 +348,10 @@ impl<R> WavReader<R>
         let block_align = try!(reader.read_le_u16());
         let bits_per_sample = try!(reader.read_le_u16());
 
+        if n_channels == 0 {
+            return Err(Error::FormatError("file contains zero channels"));
+        }
+
         // Two of the stored fields are redundant, and may be ignored. We do
         // validate them to fail early for ill-formed files.
         if (bits_per_sample != block_align / n_channels * 8) ||
