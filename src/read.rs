@@ -355,7 +355,7 @@ impl<R> WavReader<R>
         // Two of the stored fields are redundant, and may be ignored. We do
         // validate them to fail early for ill-formed files.
         if (bits_per_sample != block_align / n_channels * 8) ||
-           (n_bytes_per_sec != block_align as u32 * n_samples_per_sec) {
+           (Some(n_bytes_per_sec) != (block_align as u32).checked_mul(n_samples_per_sec)) {
             return Err(Error::FormatError("inconsistent fmt chunk"));
         }
 
