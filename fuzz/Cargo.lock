@@ -1,0 +1,28 @@
+[root]
+name = "hound-fuzz"
+version = "0.0.1"
+dependencies = [
+ "hound 3.0.0",
+ "libfuzzer-sys 0.1.0 (git+https://github.com/rust-fuzz/libfuzzer-sys.git)",
+]
+
+[[package]]
+name = "gcc"
+version = "0.3.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "hound"
+version = "3.0.0"
+
+[[package]]
+name = "libfuzzer-sys"
+version = "0.1.0"
+source = "git+https://github.com/rust-fuzz/libfuzzer-sys.git#36a3928eef5c3c38eb0f251962395bb510c39d46"
+dependencies = [
+ "gcc 0.3.44 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[metadata]
+"checksum gcc 0.3.44 (registry+https://github.com/rust-lang/crates.io-index)" = "a32cd40070d7611ab76343dcb3204b2bb28c8a9450989a83a3d590248142f439"
+"checksum libfuzzer-sys 0.1.0 (git+https://github.com/rust-fuzz/libfuzzer-sys.git)" = "<none>"
