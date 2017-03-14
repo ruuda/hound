@@ -10,6 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp;
 use std::fs;
 use std::io;
 use std::marker;
@@ -30,6 +31,9 @@ pub trait ReadExt: io::Read {
 
     /// Reads `n` bytes and returns them in a vector.
     fn read_bytes(&mut self, n: usize) -> io::Result<Vec<u8>>;
+
+    /// Skip over `n` bytes.
+    fn skip_bytes(&mut self, n: usize) -> io::Result<()>;
 
     /// Reads a single byte and interprets it as an 8-bit signed integer.
     fn read_i8(&mut self) -> io::Result<i8>;
@@ -73,6 +77,26 @@ impl<R> ReadExt for R
             let progress = try!(self.read(&mut buf[n..]));
             if progress > 0 {
                 n += progress;
+            } else {
+                return Err(io::Error::new(io::ErrorKind::Other, "Failed to read enough bytes."));
+            }
+        }
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn skip_bytes(&mut self, n: usize) -> io::Result<()> {
+        // Read from the input in chunks of 1024 bytes at a time, and discard
+        // the result. 1024 is a tradeoff between doing a lot of calls, and
+        // using too much stack space. This method is not in a hot path, so it
+        // can afford to do this.
+        let mut n_read = 0;
+        let mut buf = [0u8; 1024];
+        while n_read < n {
+            let end = cmp::min(n - n_read, 1024);
+            let progress = try!(self.read(&mut buf[0..end]));
+            if progress > 0 {
+                n_read += progress;
             } else {
                 return Err(io::Error::new(io::ErrorKind::Other, "Failed to read enough bytes."));
             }
@@ -529,12 +553,7 @@ impl<R> WavReader<R>
                 }
                 ChunkKind::Unknown => {
                     // Ignore the chunk; skip all of its bytes.
-                    // TODO: this could be more efficient by not allocating
-                    // space on the heap, reading into it and then dropping it
-                    // without use. For now, this solution is simplest. If Seek
-                    // is supported we could skip, but that is a stronger bound
-                    // than what is required ...
-                    try!(reader.read_bytes(header.len as usize));
+                    try!(reader.skip_bytes(header.len as usize));
                 }
             }
             // If no data chunk is ever encountered, the function will return
