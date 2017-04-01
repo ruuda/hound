@@ -30,11 +30,24 @@ pub extern fn go(data: &[u8]) {
     //     }
     // }
 
-    let mut iter = reader.samples::<i32>();
-    while let Some(sample) = iter.next() {
-        match sample {
-            Ok(..) => { }
-            Err(..) => return,
+    match reader.spec().sample_format {
+        hound::SampleFormat::Int => {
+            let mut iter = reader.samples::<i32>();
+            while let Some(sample) = iter.next() {
+                match sample {
+                    Ok(..) => { }
+                    Err(..) => return,
+                }
+            }
+        }
+        hound::SampleFormat::Float => {
+            let mut iter = reader.samples::<f32>();
+            while let Some(sample) = iter.next() {
+                match sample {
+                    Ok(..) => { }
+                    Err(..) => return,
+                }
+            }
         }
     }
 }
