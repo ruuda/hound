@@ -1,6 +1,15 @@
 Changelog
 =========
 
+3.0.1
+-----
+
+This release fixes a few bugs discovered through fuzzing.
+
+- Fixes high memory usage issue that could occur when reading unknown blocks.
+- Resolve various division by zero and arithmetic overflow errors.
+- Ensures compatibility with Rust 1.4 through 1.16 stable.
+
 3.0.0
 -----
 
