@@ -20,7 +20,18 @@ pub extern fn go(data: &[u8]) {
         Err(..) => return,
     };
 
-    for sample in reader.samples::<i32>() {
+    // TODO: For some reason, the iterator-based approach crashes with an
+    // obscure memory error, but the while-let-based method works perfectly
+    // fine.
+    // for sample in reader.samples::<i32>() {
+    //     match sample {
+    //         Ok(..) => { }
+    //         Err(..) => return,
+    //     }
+    // }
+
+    let mut iter = reader.samples::<i32>();
+    while let Some(sample) = iter.next() {
         match sample {
             Ok(..) => { }
             Err(..) => return,
