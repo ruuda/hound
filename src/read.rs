@@ -1025,7 +1025,8 @@ fn fuzz_crashes_should_be_fixed() {
                  .expect("failed to enumerate fuzz test corpus");
     for path in dir {
         let path = path.ok().expect("failed to obtain path info").path();
-        if path.is_file() && path.extension() == Some(OsStr::new("wav")) {
+        let is_file = fs::metadata(&path).unwrap().file_type().is_file();
+        if is_file && path.extension() == Some(OsStr::new("wav")) {
             println!("    testing {} ...", path.to_str()
                                                .expect("unsupported filename"));
             let mut reader = match WavReader::open(path) {
