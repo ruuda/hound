@@ -365,6 +365,10 @@ impl<R> WavReader<R>
             return Err(Error::FormatError("bits per sample is not a multiple of 8"));
         }
 
+        if bits_per_sample == 0 {
+            return Err(Error::FormatError("bits per sample is 0"));
+        }
+
         let spec = WavSpec {
             channels: n_channels,
             sample_rate: n_samples_per_sec,
