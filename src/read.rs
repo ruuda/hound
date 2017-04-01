@@ -1013,3 +1013,43 @@ fn sample_format_mismatch_should_signal_error() {
     assert!(reader_i8.samples::<i32>().next().unwrap().is_ok());
     assert!(reader_i8.samples::<f32>().next().unwrap().is_err());
 }
+
+#[test]
+fn fuzz_crashes_should_be_fixed() {
+    use std::fs;
+    use std::ffi::OsStr;
+
+    // This is a regression test: all crashes and other issues found through
+    // fuzzing should not cause a crash.
+    let dir = fs::read_dir("testsamples/fuzz").ok()
+                 .expect("failed to enumerate fuzz test corpus");
+    for path in dir {
+        let path = path.ok().expect("failed to obtain path info").path();
+        if path.is_file() && path.extension() == Some(OsStr::new("wav")) {
+            println!("    testing {} ...", path.to_str()
+                                               .expect("unsupported filename"));
+            let mut reader = match WavReader::open(path) {
+                Ok(r) => r,
+                Err(..) => continue,
+            };
+            match reader.spec().sample_format {
+                SampleFormat::Int => {
+                    for sample in reader.samples::<i32>() {
+                        match sample {
+                            Ok(..) => { }
+                            Err(..) => break,
+                        }
+                    }
+                }
+                SampleFormat::Float => {
+                    for sample in reader.samples::<f32>() {
+                        match sample {
+                            Ok(..) => { }
+                            Err(..) => break,
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
