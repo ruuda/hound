@@ -54,11 +54,12 @@ println!("RMS is {}", (sqr_sum / reader.len() as f64).sqrt());
 
 Features
 --------
-|                 | Read                                                    | Write                   |
-|-----------------|---------------------------------------------------------|-------------------------|
-| Format          | `PCMWAVEFORMAT`, `WAVEFORMATEX`, `WAVEFORMATEXTENSIBLE` | `WAVEFORMATEXTENSIBLE`  |
-| Encoding        | Integer PCM, IEEE Float                                 | Integer PCM             |
-| Bits per sample | 8, 16, 24, 32 (integer), 32 (float)                     | 8, 16, 24, 32 (integer) |
+
+|                 | Read                                                    | Write                               |
+|-----------------|---------------------------------------------------------|-------------------------------------|
+| Format          | `PCMWAVEFORMAT`, `WAVEFORMATEX`, `WAVEFORMATEXTENSIBLE` | `WAVEFORMATEXTENSIBLE`              |
+| Encoding        | Integer PCM, IEEE Float                                 | Integer PCM, IEEE Float             |
+| Bits per sample | 8, 16, 24, 32 (integer), 32 (float)                     | 8, 16, 24, 32 (integer), 32 (float) |
 
 License
 -------
