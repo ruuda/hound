@@ -562,3 +562,46 @@ fn write_read_i24_is_lossless() {
         }
     }
 }
+#[test]
+fn write_read_f32_is_lossless() {
+    let mut buffer = io::Cursor::new(Vec::new());
+    let write_spec = WavSpec {
+        channels: 2,
+        sample_rate: 44100,
+        bits_per_sample: 32,
+        sample_format: SampleFormat::Float,
+    };
+
+    {
+        let mut writer = WavWriter::new(&mut buffer, write_spec).unwrap();
+        for s in 1_u32..257 {
+            writer.write_sample(1.0f32 / s as f32).unwrap();
+        }
+        writer.finalize().unwrap();
+    }
+
+    {
+        buffer.set_position(0);
+        let mut reader = WavReader::new(&mut buffer).unwrap();
+        assert_eq!(write_spec, reader.spec());
+        assert_eq!(reader.len(), 256);
+        for (expected, read) in (1..257)
+            .map(|x| 1.0_f32 / x as f32)
+            .zip(reader.samples()) {
+            assert_eq!(expected, read.unwrap());
+        }
+    }
+}
+#[test]
+#[should_panic]
+fn no_32_bps_for_float_sample_format_panics() {
+    let mut buffer = io::Cursor::new(Vec::new());
+    let write_spec = WavSpec {
+        channels: 2,
+        sample_rate: 44100,
+        bits_per_sample: 16, // will panic, because value must be 32 for floating point
+        sample_format: SampleFormat::Float,
+    };
+
+    WavWriter::new(&mut buffer, write_spec).unwrap();
+}
