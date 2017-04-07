@@ -234,8 +234,20 @@ impl<W> WavWriter<W>
             // TODO: add the option to specify the channel mask. For now, use
             // the default assignment.
             try!(buffer.write_le_u32(channel_mask(self.spec.channels)));
-            // The field SubFormat. We use PCM audio with integer samples.
-            try!(buffer.write_all(&super::KSDATAFORMAT_SUBTYPE_PCM));
+            // The field SubFormat.
+            match spec.sample_format {
+                //We use PCM audio with integer samples.
+                SampleFormat::Int => try!(buffer.write_all(&super::KSDATAFORMAT_SUBTYPE_PCM)),
+
+                SampleFormat::Float => {
+                    if spec.bits_per_sample == 32 {
+                        try!(buffer.write_all(&super::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT));
+                    } else {
+                        //TODO: better error condition
+                        panic!("Invalid number of bits per sample. When writing SampleFormat::Float, bits_per_sample must be 32.");
+                    }
+                }
+            }
 
             // So far the "fmt " section, now comes the "data" section. We will
             // only write the header here, actual data are the samples. The
@@ -258,11 +270,6 @@ impl<W> WavWriter<W>
     /// sample does not fit in the number of bits specified in the `WavSpec`.
     #[inline]
     pub fn write_sample<S: Sample>(&mut self, sample: S) -> Result<()> {
-        // For now, only the integer PCM format is supported for writing.
-        if self.spec.sample_format != SampleFormat::Int {
-            return Err(Error::Unsupported);
-        }
-
         try!(sample.write(&mut self.writer, self.spec.bits_per_sample));
         self.data_bytes_written += self.bytes_per_sample as u32;
         Ok(())
@@ -547,21 +554,4 @@ fn wide_write_should_signal_error() {
         assert!(writer.write_sample(8_388_607_i32).is_ok());
         assert!(writer.write_sample(8_388_608_i32).is_err());
     }
-}
-
-#[test]
-fn float_write_should_signal_error() {
-    let mut buffer = io::Cursor::new(Vec::new());
-
-    let spec_f32 = WavSpec {
-        channels: 1,
-        sample_rate: 44100,
-        bits_per_sample: 32,
-        sample_format: SampleFormat::Float,
-    };
-
-    // Writing the IEEE_FLOAT sample format is not yet supported, so this should
-    // signal an error, rather than producing corrupt output.
-    let mut writer = WavWriter::new(&mut buffer, spec_f32).unwrap();
-    assert!(writer.write_sample(1.0).is_err());
 }
