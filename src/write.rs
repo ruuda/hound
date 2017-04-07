@@ -234,20 +234,23 @@ impl<W> WavWriter<W>
             // TODO: add the option to specify the channel mask. For now, use
             // the default assignment.
             try!(buffer.write_le_u32(channel_mask(self.spec.channels)));
-            // The field SubFormat.
-            match spec.sample_format {
-                //We use PCM audio with integer samples.
-                SampleFormat::Int => try!(buffer.write_all(&super::KSDATAFORMAT_SUBTYPE_PCM)),
 
+            // The field SubFormat.
+            let subformat_guid = match spec.sample_format {
+                // PCM audio with integer samples.
+                SampleFormat::Int => super::KSDATAFORMAT_SUBTYPE_PCM,
+                // PCM audio with 32-bit IEEE float samples.
                 SampleFormat::Float => {
                     if spec.bits_per_sample == 32 {
-                        try!(buffer.write_all(&super::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT));
+                        super::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
                     } else {
-                        //TODO: better error condition
-                        panic!("Invalid number of bits per sample. When writing SampleFormat::Float, bits_per_sample must be 32.");
+                        panic!("Invalid number of bits per sample. \
+                               When writing SampleFormat::Float, \
+                               bits_per_sample must be 32.");
                     }
                 }
-            }
+            };
+            try!(buffer.write_all(&subformat_guid));
 
             // So far the "fmt " section, now comes the "data" section. We will
             // only write the header here, actual data are the samples. The
