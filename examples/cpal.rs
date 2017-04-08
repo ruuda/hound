@@ -17,7 +17,6 @@ extern crate cpal;
 
 use std::env;
 use std::thread;
-use std::time;
 
 fn main() {
     // Make a WavReader that reads the file provided as program argument.
@@ -67,15 +66,18 @@ fn main() {
     };
 
     // The voice must have some data before playing for the first time.
-    append_data(&mut voice);
+    let mut has_more = append_data(&mut voice);
     voice.play();
 
     // Then we keep providing new data until the end of the audio.
-    while append_data(&mut voice) { }
+    while has_more {
+        has_more = append_data(&mut voice);
+    }
 
-    // TODO: Cpal has no function (yet) to wait for playback to complete, so
-    // sleep manually.
-    thread::sleep(time::Duration::from_secs(1));
+    // Wait for playback to complete.
+    while voice.underflowed() {
+        thread::yield_now();
+    }
 }
 
 fn matches_format(format: &cpal::Format, spec: &hound::WavSpec) -> bool {
