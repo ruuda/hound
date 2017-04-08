@@ -16,7 +16,12 @@ documentation = "https://docs.rs/hound"
 travis-ci = { repository = "ruuda/hound", branch = "v3.0.1" }
 
 [dev-dependencies]
-cpal = "0.1.2"
+# An older version of cpal, but newer versions depend on the futures library,
+# which is incompatible with the version of Rust that Hound guarantees to
+# support. We also need to pin the version of lazy_static -- a transitive
+# dependency of cpal -- to a version that compiles with a non-nightly compiler.
+cpal = "0.2.12"
+lazy_static = "=0.2.0"
 
 # TODO: enable this when sound_stream (or portaudio, actually) builds properly.
 # sound_stream = "0.3.2"

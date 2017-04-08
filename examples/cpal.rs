@@ -25,26 +25,45 @@ fn main() {
     let mut reader = hound::WavReader::open(fname).unwrap();
     let spec = reader.spec();
 
+    let endpoint = cpal::get_default_endpoint().unwrap();
+
+    // Pick a playback format supported by the endpoint, which matches the spec
+    // of the wav file.
+    let format = endpoint.get_supported_formats_list().unwrap()
+                         .filter(|f| matches_format(f, &spec))
+                         .next()
+                         .expect("no supported playback format");
+
     // A voice in cpal is used for playback.
-    let mut voice = cpal::Voice::new();
+    let mut voice = cpal::Voice::new(&endpoint, &format).unwrap();
+
+    let mut samples_left = reader.len() as usize;
 
     let mut append_data = |voice: &mut cpal::Voice| {
-        let mut samples = reader.samples::<i16>();
-        let samples_left = samples.len();
-
-        if samples_left == 0 { return false; }
-
-        let mut buffer: cpal::Buffer<i16> =
-            voice.append_data(spec.channels,
-                              cpal::SamplesRate(spec.sample_rate),
-                              samples_left);
-        // Fill the cpal buffer with data from the wav file.
-        for (dest, src) in buffer.iter_mut().zip(&mut samples) {
-            *dest = src.unwrap();
+        match voice.append_data(samples_left) {
+            cpal::UnknownTypeBuffer::I16(mut wrapped_buf) => {
+                // We cannot rely on Rust's autoderef here, because we want to
+                // call .len() on the buffer, which would cause a deref() of the
+                // buffer, not a deref_mut(), and cpal's deref() implementation
+                // is to panic.
+                let buf: &mut [i16] = &mut *wrapped_buf;
+                for (dst, src) in buf.iter_mut().zip(reader.samples::<i16>()) {
+                    *dst = src.unwrap();
+                }
+                samples_left -= buf.len();
+            }
+            cpal::UnknownTypeBuffer::F32(mut wrapped_buf) => {
+                let buf: &mut [f32] = &mut *wrapped_buf;
+                for (dst, src) in buf.iter_mut().zip(reader.samples::<f32>()) {
+                    *dst = src.unwrap();
+                }
+                samples_left -= buf.len();
+            }
+            _ => unreachable!()
         }
 
-        // Probably not done, loop again.
-        true
+        // Loop again if there are samples left.
+        samples_left > 0
     };
 
     // The voice must have some data before playing for the first time.
@@ -57,4 +76,29 @@ fn main() {
     // TODO: Cpal has no function (yet) to wait for playback to complete, so
     // sleep manually.
     thread::sleep(time::Duration::from_secs(1));
+}
+
+fn matches_format(format: &cpal::Format, spec: &hound::WavSpec) -> bool {
+    let cpal::SamplesRate(sample_rate) = format.samples_rate;
+    if sample_rate != spec.sample_rate {
+        return false
+    }
+
+    if format.channels.len() != spec.channels as usize {
+        return false
+    }
+
+    let data_type = match (spec.bits_per_sample, spec.sample_format) {
+        (16, hound::SampleFormat::Int) => Some(cpal::SampleFormat::I16),
+        (32, hound::SampleFormat::Float) => Some(cpal::SampleFormat::F32),
+        _ => None
+    };
+
+    if Some(format.data_type) != data_type {
+        return false
+    }
+
+    // If the sample rate, channel count, and sample format match, then we can
+    // play back the file in this format.
+    true
 }
