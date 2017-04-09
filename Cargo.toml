@@ -22,6 +22,3 @@ travis-ci = { repository = "ruuda/hound", branch = "v3.0.1" }
 # dependency of cpal -- to a version that compiles with a non-nightly compiler.
 cpal = "0.2.12"
 lazy_static = "=0.2.0"
-
-# TODO: enable this when sound_stream (or portaudio, actually) builds properly.
-# sound_stream = "0.3.2"
