@@ -1,6 +1,18 @@
 Changelog
 =========
 
+3.1.0
+-----
+
+Release highlights:
+
+- Support for writing IEEE float was added.
+- The cpal example was updated, and it now compiles on OS X.
+- An OS X target was added to the CI configuration.
+- Ensures compatibility with Rust 1.4 through 1.16 stable.
+
+Many thanks to Alex Zywicki for contributing to this release.
+
 3.0.1
 -----
 
