@@ -1,6 +1,10 @@
-language: rust
+# Don't spam me please, I'll check Travis manually.
+notifications:
+  email: false
 
 sudo: false
+
+language: rust
 
 addons:
   apt:
