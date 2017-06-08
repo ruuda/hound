@@ -4,6 +4,8 @@ Changelog
 3.1.0
 -----
 
+Released 2017-04-09.
+
 Release highlights:
 
 - Support for writing IEEE float was added.
@@ -16,6 +18,8 @@ Many thanks to Alex Zywicki for contributing to this release.
 3.0.1
 -----
 
+Released 2017-04-01.
+
 This release fixes a few bugs discovered through fuzzing.
 
 - Fixes high memory usage issue that could occur when reading unknown blocks.
@@ -24,6 +28,8 @@ This release fixes a few bugs discovered through fuzzing.
 
 3.0.0
 -----
+
+Released 2016-11-27.
 
 This release focuses on improving write performance. Highlights:
 
@@ -43,6 +49,8 @@ of Rust.
 2.0.0
 -----
 
+Released 2016-07-31.
+
 Release highlights:
 
 - Ensures compatibility with Rust 1.4 through 1.10.
@@ -59,6 +67,8 @@ Many thanks to Mitchell Nordine for his contributions to this release.
 1.1.0
 -----
 
+Released 2015-09-14.
+
 Release highlights:
 
 - New `WavReader::into_inner` method for consistency with the standard library.
@@ -69,6 +79,8 @@ Many thanks to Pierre Krieger for his contributions to this release.
 
 1.0.0
 -----
+
+Released 2015-07-21.
 
 This is the first stable release of Hound. Only small changes have been made
 with respect to v0.4.0. Release highlights:
@@ -81,6 +93,8 @@ with respect to v0.4.0. Release highlights:
 0.4.0
 -----
 
+Released 2015-05-16.
+
 Release highlights:
 
 - Works with Rust 1.0.0.
@@ -91,6 +105,8 @@ Release highlights:
 
 0.3.0
 -----
+
+Released 2015-05-05.
 
 Release highlights:
 
@@ -103,9 +119,14 @@ Release highlights:
 
 0.2.0
 -----
+
+Released 2015-04-09.
+
 This version adds support for decoding wav files in addition to writing them.
 
 0.1.0
 -----
+
+Released 2015-04-01.
 
 Initial release with only write support.
