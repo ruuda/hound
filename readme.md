@@ -61,6 +61,11 @@ Features
 | Encoding        | Integer PCM, IEEE Float                                 | Integer PCM, IEEE Float             |
 | Bits per sample | 8, 16, 24, 32 (integer), 32 (float)                     | 8, 16, 24, 32 (integer), 32 (float) |
 
+Contributing
+------------
+Contributions in the form of bug reports, feature requests, or pull requests are
+welcome. See [contributing.md](contributing.md).
+
 License
 -------
 Hound is licensed under the [Apache 2.0][apache2] license. It may be used in
