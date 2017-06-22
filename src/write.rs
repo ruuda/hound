@@ -154,6 +154,9 @@ pub struct WavWriter<W>
     /// The buffer for the sample writer, which is recycled throughout calls to
     /// avoid allocating frequently.
     sample_writer_buffer: Vec<u8>,
+
+    /// Write `WAVEFORMATEXTENSIBLE` format instead of `WAVEFORMATEX`
+    extensible: bool,
 }
 
 impl<W> WavWriter<W>
@@ -176,6 +179,11 @@ impl<W> WavWriter<W>
             data_bytes_written: 0,
             sample_writer_buffer: Vec::new(),
             finalized: false,
+            // Tip from https://msdn.microsoft.com/en-us/library/ms713497.aspx:
+            // Formats that support more than two channels or sample sizes of more
+            // than 16 bits can be described in a WAVEFORMATEXTENSIBLE structure,
+            // which includes the WAVEFORMAT structure.
+            extensible: spec.channels > 2 || spec.bits_per_sample > 16,
         };
 
         // Write the header immediately. This way we don't have to check whether
@@ -187,23 +195,124 @@ impl<W> WavWriter<W>
 
     /// Writes the RIFF WAVE header
     fn write_header(&mut self) -> io::Result<()> {
-        // Useful links:
-        // https://msdn.microsoft.com/en-us/library/ms713462.aspx
-        // https://msdn.microsoft.com/en-us/library/ms713497.aspx
+        if self.extensible {
+            self.write_waveformatextensible()
+        } else {
+            self.write_waveformatex()
+        }
+    }
 
-        let mut header = [0u8; 68];
+    /// Writes magic bytes and size of file with wav struct prefix
+    fn write_initial_block(&mut self, buffer: &mut io::Cursor<&mut [u8]>)
+                           -> io::Result<()> {
+        try!(buffer.write_all("RIFF".as_bytes()));
+
+        // Skip 4 bytes that will be filled with the file size afterwards.
+        try!(buffer.write_le_u32(0));
+
+        try!(buffer.write_all("WAVE".as_bytes()));
+        try!(buffer.write_all("fmt ".as_bytes()));
+
+        Ok(())
+    }
+
+    /// Writes the specification to wav file
+    fn write_spec_block(&mut self, buffer: &mut io::Cursor<&mut [u8]>)
+                        -> io::Result<()> {
         let spec = &self.spec;
+        // The field nChannels.
+        try!(buffer.write_le_u16(spec.channels));
+
+        // The field nSamplesPerSec.
+        try!(buffer.write_le_u32(spec.sample_rate));
+        let bytes_per_sec = spec.sample_rate
+                          * self.bytes_per_sample as u32
+                          * spec.channels as u32;
+
+        // The field nAvgBytesPerSec;
+        try!(buffer.write_le_u32(bytes_per_sec));
+
+        // The field nBlockAlign. Block align * sample rate = bytes per sec.
+        try!(buffer.write_le_u16((bytes_per_sec / spec.sample_rate) as u16));
+
+        Ok(())
+    }
+
+    /// Writes "data" section name
+    fn write_data_part(&mut self, buffer: &mut io::Cursor<&mut [u8]>)
+                       -> io::Result<()> {
+        // We will only write the header here, actual data are the samples.
+        // The number of bytes that this will take is not known at this point.
+        // The 0 will be overwritten later.
+        try!(buffer.write_all("data".as_bytes()));
+        try!(buffer.write_le_u32(0));
+
+        Ok(())
+    }
+
+    /// Writes the header based on WAVEFORMATEX struct
+    fn write_waveformatex(&mut self) -> io::Result<()> {
+        // Useful links:
+        // https://msdn.microsoft.com/en-us/library/ms713497.aspx
+        // http://soundfile.sapp.org/doc/WaveFormat/
+        let mut header = [0u8; 44];
 
         // Write the header in-memory first.
         {
             let mut buffer: io::Cursor<&mut [u8]> = io::Cursor::new(&mut header);
-            try!(buffer.write_all("RIFF".as_bytes()));
 
-            // Skip 4 bytes that will be filled with the file size afterwards.
-            try!(buffer.write_le_u32(0));
+            try!(self.write_initial_block(&mut buffer));
 
-            try!(buffer.write_all("WAVE".as_bytes()));
-            try!(buffer.write_all("fmt ".as_bytes()));
+            try!(buffer.write_le_u32(16)); // Size of the WAVE header chunk.
+
+            // The following is based on the WAVEFORMATEX struct as
+            // documented on MSDN.
+
+            // The field wFormatTag
+            match self.spec.sample_format {
+                // WAVE_FORMAT_PCM
+                SampleFormat::Int => {
+                    try!(buffer.write_le_u16(1));
+                },
+                // WAVE_FORMAT_IEEE_FLOAT
+                SampleFormat::Float => {
+                    if self.spec.bits_per_sample == 32 {
+                        try!(buffer.write_le_u16(3));
+                    } else {
+                        panic!("Invalid number of bits per sample. \
+                               When writing SampleFormat::Float, \
+                               bits_per_sample must be 32.");
+                    }
+                },
+            };
+
+            try!(self.write_spec_block(&mut buffer));
+
+            // The field wBitsPerSample, the real number of bits per sample.
+            try!(buffer.write_le_u16(self.spec.bits_per_sample));
+
+            try!(self.write_data_part(&mut buffer));
+        }
+
+        // Then write the entire header at once.
+        try!(self.writer.write_all(&header));
+
+        Ok(())
+    }
+
+    /// Writes the header based on WAVEFORMATEXTENSIBLE struct
+    fn write_waveformatextensible(&mut self) -> io::Result<()> {
+        // Useful links:
+        // https://msdn.microsoft.com/en-us/library/ms713496.aspx
+        // https://msdn.microsoft.com/en-us/library/ms713462.aspx
+
+        let mut header = [0u8; 68];
+
+        // Write the header in-memory first.
+        {
+            let mut buffer: io::Cursor<&mut [u8]> = io::Cursor::new(&mut header);
+            try!(self.write_initial_block(&mut buffer));
+
             try!(buffer.write_le_u32(40)); // Size of the WAVE header chunk.
 
             // The following is based on the WAVEFORMATEXTENSIBLE struct as
@@ -212,17 +321,9 @@ impl<W> WavWriter<W>
             // The field wFormatTag, value 1 means WAVE_FORMAT_PCM, but we use
             // the slightly more sophisticated WAVE_FORMAT_EXTENSIBLE.
             try!(buffer.write_le_u16(0xfffe));
-            // The field nChannels.
-            try!(buffer.write_le_u16(spec.channels));
-            // The field nSamplesPerSec.
-            try!(buffer.write_le_u32(spec.sample_rate));
-            let bytes_per_sec = spec.sample_rate
-                              * self.bytes_per_sample as u32
-                              * spec.channels as u32;
-            // The field nAvgBytesPerSec;
-            try!(buffer.write_le_u32(bytes_per_sec));
-            // The field nBlockAlign. Block align * sample rate = bytes per sec.
-            try!(buffer.write_le_u16((bytes_per_sec / spec.sample_rate) as u16));
+
+            try!(self.write_spec_block(&mut buffer));
+
             // The field wBitsPerSample. This is actually the size of the
             // container, so this is a multiple of 8.
             try!(buffer.write_le_u16(self.bytes_per_sample as u16 * 8));
@@ -236,12 +337,12 @@ impl<W> WavWriter<W>
             try!(buffer.write_le_u32(channel_mask(self.spec.channels)));
 
             // The field SubFormat.
-            let subformat_guid = match spec.sample_format {
+            let subformat_guid = match self.spec.sample_format {
                 // PCM audio with integer samples.
                 SampleFormat::Int => super::KSDATAFORMAT_SUBTYPE_PCM,
                 // PCM audio with 32-bit IEEE float samples.
                 SampleFormat::Float => {
-                    if spec.bits_per_sample == 32 {
+                    if self.spec.bits_per_sample == 32 {
                         super::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
                     } else {
                         panic!("Invalid number of bits per sample. \
@@ -252,12 +353,7 @@ impl<W> WavWriter<W>
             };
             try!(buffer.write_all(&subformat_guid));
 
-            // So far the "fmt " section, now comes the "data" section. We will
-            // only write the header here, actual data are the samples. The
-            // number of bytes that this will take is not known at this point.
-            // The 0 will be overwritten later.
-            try!(buffer.write_all("data".as_bytes()));
-            try!(buffer.write_le_u32(0));
+            try!(self.write_data_part(&mut buffer));
         }
 
         // Then write the entire header at once.
@@ -337,11 +433,13 @@ impl<W> WavWriter<W>
         // Extract the underlying writer and rewind it to the start, to update
         // the header fields of which we now know the value.
 
-        // The header minus magic and 32-bit filesize is 60 bytes long.
-        let file_size = self.data_bytes_written + 60;
+        // The header minus magic and 32-bit filesize.
+        let header_size = if self.extensible { 64 } else { 40 };
+
+        let file_size = self.data_bytes_written + (header_size - 4);
         try!(self.writer.seek(io::SeekFrom::Start(4)));
         try!(self.writer.write_le_u32(file_size));
-        try!(self.writer.seek(io::SeekFrom::Start(64)));
+        try!(self.writer.seek(io::SeekFrom::Start(header_size as u64)));
         try!(self.writer.write_le_u32(self.data_bytes_written));
 
         // Signal error if the last sample was not finished, but do so after
