@@ -12,16 +12,13 @@ addons:
     - libasound2-dev
 
 rust:
-  # Test on every other Rust version since the minimum supported version, to not
+  # Test on every fourth Rust version since the minimum supported version, to not
   # waste too many resources.
   - 1.4.0
-  - 1.6.0
   - 1.8.0
-  - 1.10.0
   - 1.12.0
-  - 1.14.0
   - 1.16.0
-  - 1.18.0
+  - 1.20.0
   - beta
   - nightly
 
