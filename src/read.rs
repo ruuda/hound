@@ -396,11 +396,14 @@ impl<R> WavReader<R>
     fn read_wave_format_pcm(mut reader: R, chunk_len: u32, spec: WavSpec) -> Result<WavSpecEx> {
         // When there is a PCMWAVEFORMAT struct, the chunk is 16 bytes long.
         // The WAVEFORMATEX structs includes two extra bytes, `cbSize`.
-        let is_wave_format_ex = chunk_len == 18;
-
-        if !is_wave_format_ex && chunk_len != 16 {
-            return Err(Error::FormatError("unexpected fmt chunk size"));
-        }
+        let is_wave_format_ex = match chunk_len {
+            16 => false,
+            18 => true,
+            // Other sizes are unexpected, but such files do occur in the wild,
+            // and reading these files is still possible, so we allow this.
+            40 => true,
+            _ => return Err(Error::FormatError("unexpected fmt chunk size")),
+        };
 
         if is_wave_format_ex {
             // For WAVE_FORMAT_PCM which we are reading, there should be no
@@ -413,9 +416,20 @@ impl<R> WavReader<R>
             // For WAVE_FORMAT_PCM in WAVEFORMATEX, only 8 or 16 bits per
             // sample are valid according to
             // https://msdn.microsoft.com/en-us/library/ms713497.aspx.
-            if spec.bits_per_sample != 8 && spec.bits_per_sample != 16 {
-                return Err(Error::FormatError("bits per sample is not 8 or 16"));
+            // 24 bits per sample is explicitly not valid inside a WAVEFORMATEX
+            // structure, but such files do occur in the wild nonetheless, and
+            // there is no good reason why we couldn't read them.
+            match spec.bits_per_sample {
+                8 => {}
+                16 => {}
+                24 => {},
+                _ => return Err(Error::FormatError("bits per sample is not 8 or 16")),
             }
+        }
+
+        // If the chunk len was longer than expected, ignore the additional bytes.
+        if chunk_len == 40 {
+            try!(reader.skip_bytes(22));
         }
 
         let spec_ex = WavSpecEx {
