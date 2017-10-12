@@ -592,6 +592,7 @@ fn write_read_f32_is_lossless() {
         }
     }
 }
+
 #[test]
 #[should_panic]
 fn no_32_bps_for_float_sample_format_panics() {

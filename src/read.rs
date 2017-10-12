@@ -990,6 +990,29 @@ fn read_wav_wave_format_extensible_ieee_float() {
 }
 
 #[test]
+fn read_wav_nonstandard() {
+    // The test sample here is adapted from a file encountered in the wild (data
+    // chunk replaced with two zero samples, some metadata dropped, and the file
+    // length in the header fixed). It is not a valid file according to the
+    // standard, but many players can deal with it nonetheless. (The file even
+    // contains some metadata; open it in a hex editor if you would like to know
+    // which program created it.) The file contains a regular PCM format tag,
+    // but the size of the fmt chunk is one that would be expected of a
+    // WAVEFORMATEXTENSIBLE chunk. The bits per sample is 24, which is invalid
+    // for WAVEFORMATEX, but we can read it nonetheless.
+    let mut wav_reader = WavReader::open("testsamples/nonstandard.wav").unwrap();
+
+    assert_eq!(wav_reader.spec().bits_per_sample, 24);
+    assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
+
+    let samples: Vec<i32> = wav_reader.samples()
+                                      .map(|r| r.unwrap())
+                                      .collect();
+
+    assert_eq!(&samples[..], &[0, 0]);
+}
+
+#[test]
 fn wide_read_should_signal_error() {
     let mut reader24 = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
         .unwrap();
