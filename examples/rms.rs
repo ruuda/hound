@@ -42,6 +42,6 @@ fn main() {
             hound::SampleFormat::Float => compute_rms::<f32, _>(&mut reader),
             hound::SampleFormat::Int => compute_rms::<i32, _>(&mut reader),
         };
-        println!("{}: {:0.1}", fname, rms);
+        println!("{}: {:0.1} ({} samples)", fname, rms, reader.len());
     }
 }
