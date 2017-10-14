@@ -1,6 +1,25 @@
 Changelog
 =========
 
+3.2.0
+-----
+
+Released 2017-10-14.
+
+**Breaking changes**:
+
+- None.
+
+Release highlights:
+
+- Hound will now write the older WAVEFORMATEX format whenever possible, rather
+  than the newer WAVEFORMATEXTENSIBLE, to improve compatibility.
+- Certain nonstandard files (produced among others by “Pro Tools”) can now
+  be read.
+- Ensures compatibility with Rust 1.4 through 1.21 stable.
+
+Many thanks to Denis Kolodin for contributing to this release.
+
 3.1.0
 -----
 
