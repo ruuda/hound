@@ -422,7 +422,7 @@ impl<R> WavReader<R>
             match spec.bits_per_sample {
                 8 => {}
                 16 => {}
-                24 => {},
+                24 => {}
                 _ => return Err(Error::FormatError("bits per sample is not 8 or 16")),
             }
         }
