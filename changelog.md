@@ -6,6 +6,10 @@ Changelog
 
 Released 2017-04-09.
 
+**Breaking changes**:
+
+- None.
+
 Release highlights:
 
 - Support for writing IEEE float was added.
@@ -22,6 +26,12 @@ Released 2017-04-01.
 
 This release fixes a few bugs discovered through fuzzing.
 
+**Breaking changes**:
+
+- None.
+
+Release highlights:
+
 - Fixes high memory usage issue that could occur when reading unknown blocks.
 - Resolve various division by zero and arithmetic overflow errors.
 - Ensures compatibility with Rust 1.4 through 1.16 stable.
@@ -31,13 +41,17 @@ This release fixes a few bugs discovered through fuzzing.
 
 Released 2016-11-27.
 
-This release focuses on improving write performance. Highlights:
+This release focuses on improving write performance.
 
-- The header is now written when a `WavWriter` is constructed, therefore
-  the constructor now returns a `Result`. This is a breaking change.
+**Breaking changes**:
+
+- When a `WavWriter` is constructed, the header is now written immediately,
+  therefore the constructor now returns a `Result`.
+
+Other changes:
+
 - `WavWriter` no longer maintains a buffer internally.
-  `WavWriter::create()` does still wrap the file it opens in a buffered
-  writer.
+  `WavWriter::create()` does still wrap the file it opens in a buffered writer.
 - Adds `SampleWriter16` for fast writing of 16-bit samples. Dedicated
   writers for other bit depths might be added in future releases.
 
@@ -51,16 +65,17 @@ of Rust.
 
 Released 2016-07-31.
 
+**Breaking changes**:
+
+- Support for Rust 1.0 through 1.3 has been dropped.
+- The `WavSpec` struct gained a new `sample_format` member. To upgrade,
+  add `sample_format: hound::SampleFormat::Int` to places where a `WavSpec`
+  is constructed.
+
 Release highlights:
 
 - Ensures compatibility with Rust 1.4 through 1.10.
-- Support for Rust 1.0 through 1.3 has been dropped.
 - Adds support for reading files with 32-bit IEEE float samples.
-
-Apart from requiring a newer Rust version, this release includes a minor
-breaking change: the `WavSpec` struct gained a new `sample_format`
-member. To upgrade, add `sample_format: hound::SampleFormat::Int` to
-places where a `WavSpec` is constructed.
 
 Many thanks to Mitchell Nordine for his contributions to this release.
 
