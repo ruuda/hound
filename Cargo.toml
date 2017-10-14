@@ -18,7 +18,5 @@ travis-ci = { repository = "ruuda/hound", branch = "v3.1.0" }
 [dev-dependencies]
 # An older version of cpal, but newer versions depend on the futures library,
 # which is incompatible with the version of Rust that Hound guarantees to
-# support. We also need to pin the version of lazy_static -- a transitive
-# dependency of cpal -- to a version that compiles with a non-nightly compiler.
+# support.
 cpal = "0.2.12"
-lazy_static = "=0.2.0"
