@@ -4,6 +4,7 @@ A wav encoding and decoding library in Rust.
 
 [![Build Status][ci-img]][ci]
 [![Crates.io version][crate-img]][crate]
+[![Changelog][changelog-img]](changelog.md)
 [![Documentation][docs-img]][docs]
 
 Hound can read and write the WAVE audio format, an ubiquitous format for raw,
@@ -75,12 +76,13 @@ use Hound in your GPLv2-licensed software, you can add an [exception][exception]
 to your copyright notice. Please do not open an issue if you disagree with the
 choice of license.
 
-[ci-img]:    https://travis-ci.org/ruuda/hound.svg?branch=master
-[ci]:        https://travis-ci.org/ruuda/hound
-[crate-img]: http://img.shields.io/crates/v/hound.svg
-[crate]:     https://crates.io/crates/hound
-[docs-img]:  http://img.shields.io/badge/docs-online-blue.svg
-[docs]:      https://docs.rs/hound
-[claxon]:    https://github.com/ruuda/claxon
-[apache2]:   https://www.apache.org/licenses/LICENSE-2.0
-[exception]: https://www.gnu.org/licenses/gpl-faq.html#GPLIncompatibleLibs
+[ci-img]:        https://travis-ci.org/ruuda/hound.svg?branch=master
+[ci]:            https://travis-ci.org/ruuda/hound
+[crate-img]:     https://img.shields.io/crates/v/hound.svg
+[crate]:         https://crates.io/crates/hound
+[changelog-img]: https://img.shields.io/badge/changelog-online-blue.svg
+[docs-img]:      https://img.shields.io/badge/docs-online-blue.svg
+[docs]:          https://docs.rs/hound
+[claxon]:        https://github.com/ruuda/claxon
+[apache2]:       https://www.apache.org/licenses/LICENSE-2.0
+[exception]:     https://www.gnu.org/licenses/gpl-faq.html#GPLIncompatibleLibs
