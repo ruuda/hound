@@ -672,6 +672,26 @@ impl<R> WavReader<R>
     pub fn into_inner(self) -> R {
         self.reader
     }
+
+    /// Seek to the given sample position within the file.
+    ///
+    /// This method requires that the inner reader `R` implements `Seek`.
+    ///
+    /// The given sample position represents the number of samples from the
+    /// beginning of the audio data. Thus the given sample position should not
+    /// exceed the length of the file in samples (returned by `len()`). The
+    /// behaviour when seeking beyond `len()` depends on the reader's `Seek`
+    /// implementation.
+    pub fn seek_sample(&mut self, sample_position: u32) -> io::Result<()>
+        where R: io::Seek,
+    {
+        let bytes_per_sample = self.spec.bits_per_sample / 8;
+        let offset_samples = sample_position as i64 - self.samples_read as i64;
+        let offset_bytes = offset_samples * bytes_per_sample as i64;
+        try!(self.reader.seek(io::SeekFrom::Current(offset_bytes)));
+        self.samples_read = sample_position;
+        Ok(())
+    }
 }
 
 impl WavReader<io::BufReader<fs::File>> {
@@ -1089,5 +1109,37 @@ fn fuzz_crashes_should_be_fixed() {
                 }
             }
         }
+    }
+}
+
+#[test]
+fn seek_sample_is_consistent() {
+    let files = &["testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
+                  "testsamples/waveformatex-16bit-44100Hz-stereo.wav",
+                  "testsamples/waveformatextensible-32bit-48kHz-stereo.wav"];
+    for fname in files {
+        let mut reader = WavReader::open(fname).unwrap();
+
+        // Seeking back to the start should "reset" the reader.
+        let count = reader.samples::<i32>().count();
+        reader.seek_sample(0).unwrap();
+        assert_eq!(reader.samples_read, 0);
+        assert_eq!(count, reader.samples::<i32>().count());
+
+        // Seek to the last sample.
+        let last_sample_position = reader.len() - 1;
+        reader.seek_sample(last_sample_position).unwrap();
+        {
+            let mut samples = reader.samples::<i32>();
+            assert!(samples.next().is_some());
+            assert!(samples.next().is_none());
+        }
+
+        // Seeking beyond the audio data produces no samples.
+        let num_samples = reader.len();
+        reader.seek_sample(num_samples).unwrap();
+        assert!(reader.samples::<i32>().next().is_none());
+        reader.seek_sample(::std::u32::MAX).unwrap();
+        assert!(reader.samples::<i32>().next().is_none());
     }
 }
