@@ -677,15 +677,16 @@ impl<R> WavReader<R>
     ///
     /// This method requires that the inner reader `R` implements `Seek`.
     ///
-    /// The given sample position represents the number of samples from the
-    /// beginning of the audio data. Thus the given sample position should not
-    /// exceed the length of the file in samples (returned by `len()`). The
-    /// behaviour when seeking beyond `len()` depends on the reader's `Seek`
-    /// implementation.
-    pub fn seek_sample(&mut self, sample_position: u32) -> io::Result<()>
+    /// The given sample position represents the duration in samples from the
+    /// beginning of the audio data independent of the number of channels. Thus
+    /// the given sample position should not exceed the duration of the file in
+    /// samples (returned by `duration()`). The behaviour when seeking beyond
+    /// `duration()` depends on the reader's `Seek` implementation.
+    pub fn seek_sample(&mut self, sample_duration_position: u32) -> io::Result<()>
         where R: io::Seek,
     {
         let bytes_per_sample = self.spec.bits_per_sample / 8;
+        let sample_position = sample_duration_position * self.spec.channels as u32;
         let offset_samples = sample_position as i64 - self.samples_read as i64;
         let offset_bytes = offset_samples * bytes_per_sample as i64;
         try!(self.reader.seek(io::SeekFrom::Current(offset_bytes)));
@@ -1127,11 +1128,14 @@ fn seek_sample_is_consistent() {
         assert_eq!(count, reader.samples::<i32>().count());
 
         // Seek to the last sample.
-        let last_sample_position = reader.len() - 1;
+        let last_sample_position = reader.duration() - 1;
+        let channels = reader.spec.channels;
         reader.seek_sample(last_sample_position).unwrap();
         {
             let mut samples = reader.samples::<i32>();
-            assert!(samples.next().is_some());
+            for _ in 0..channels {
+                assert!(samples.next().is_some());
+            }
             assert!(samples.next().is_none());
         }
 
@@ -1139,7 +1143,7 @@ fn seek_sample_is_consistent() {
         let num_samples = reader.len();
         reader.seek_sample(num_samples).unwrap();
         assert!(reader.samples::<i32>().next().is_none());
-        reader.seek_sample(::std::u32::MAX).unwrap();
+        reader.seek_sample(::std::u32::MAX / channels as u32).unwrap();
         assert!(reader.samples::<i32>().next().is_none());
     }
 }
