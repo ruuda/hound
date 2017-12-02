@@ -1,6 +1,23 @@
 Changelog
 =========
 
+3.3.0
+-----
+
+Released 2017-12-02.
+
+**Breaking changes**:
+
+- None.
+
+Release highlights:
+
+- Hound now supports seeking to a particular time in the file.
+  See `WavReader::seek()`.
+- Ensures compatibility with Rust 1.4 through 1.22 stable.
+
+Many thanks to Mitchell Nordine for contributing to this release.
+
 3.2.0
 -----
 
