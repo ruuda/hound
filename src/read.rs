@@ -406,12 +406,11 @@ impl<R> WavReader<R>
         };
 
         if is_wave_format_ex {
-            // For WAVE_FORMAT_PCM which we are reading, there should be no
-            // extra data, so `cbSize` should be 0.
-            let cb_size = try!(reader.read_le_u16());
-            if cb_size != 0 {
-                return Err(Error::FormatError("unexpected WAVEFORMATEX size"));
-            }
+            // `cbSize` can be used for non-PCM formats to specify the size of
+            // additional data. However, for WAVE_FORMAT_PCM, the member should
+            // be ignored, see https://msdn.microsoft.com/en-us/library/ms713497.aspx.
+            // Nonzero values do in fact occur in practice.
+            let _cb_size = try!(reader.read_le_u16());
 
             // For WAVE_FORMAT_PCM in WAVEFORMATEX, only 8 or 16 bits per
             // sample are valid according to
@@ -943,10 +942,11 @@ fn read_wav_stereo() {
 }
 
 #[test]
-fn read_wav_8bit() {
+fn read_wav_pcm_wave_format_8bit() {
     let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav")
                                    .unwrap();
 
+    assert_eq!(wav_reader.spec().channels, 1);
     assert_eq!(wav_reader.spec().bits_per_sample, 8);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
@@ -956,6 +956,24 @@ fn read_wav_8bit() {
 
     // The test file has been prepared with these exact four samples.
     assert_eq!(&samples[..], &[19, -53, 89, -127]);
+}
+
+/// Regression test for a real-world wav file encountered in Quake.
+#[test]
+fn read_wav_wave_format_ex_8bit() {
+    let mut wav_reader = WavReader::open("testsamples/waveformatex-8bit-11025Hz-mono.wav").unwrap();
+
+    assert_eq!(wav_reader.spec().channels, 1);
+    assert_eq!(wav_reader.spec().bits_per_sample, 8);
+    assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
+
+    let samples: Vec<i32> = wav_reader.samples()
+                                      .map(|r| r.unwrap())
+                                      .collect();
+
+    // The audio data has been zeroed out, but for 8-bit files, a zero means a
+    // sample value of 128.
+    assert_eq!(&samples[..], &[-128, -128, -128, -128]);
 }
 
 /// This test sample tests both reading the WAVEFORMATEXTENSIBLE header, and 24-bit samples.
@@ -1032,11 +1050,6 @@ fn read_wav_nonstandard_01() {
                                       .collect();
 
     assert_eq!(&samples[..], &[0, 0]);
-}
-
-#[test]
-fn read_wav_nonstandard_02() {
-    let mut wav_reader = WavReader::open("testsamples/nonstandard-02.wav").unwrap();
 }
 
 #[test]
