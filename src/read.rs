@@ -1012,7 +1012,7 @@ fn read_wav_wave_format_extensible_ieee_float() {
 }
 
 #[test]
-fn read_wav_nonstandard() {
+fn read_wav_nonstandard_01() {
     // The test sample here is adapted from a file encountered in the wild (data
     // chunk replaced with two zero samples, some metadata dropped, and the file
     // length in the header fixed). It is not a valid file according to the
@@ -1022,7 +1022,7 @@ fn read_wav_nonstandard() {
     // but the size of the fmt chunk is one that would be expected of a
     // WAVEFORMATEXTENSIBLE chunk. The bits per sample is 24, which is invalid
     // for WAVEFORMATEX, but we can read it nonetheless.
-    let mut wav_reader = WavReader::open("testsamples/nonstandard.wav").unwrap();
+    let mut wav_reader = WavReader::open("testsamples/nonstandard-01.wav").unwrap();
 
     assert_eq!(wav_reader.spec().bits_per_sample, 24);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
