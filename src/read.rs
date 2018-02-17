@@ -1035,6 +1035,11 @@ fn read_wav_nonstandard_01() {
 }
 
 #[test]
+fn read_wav_nonstandard_02() {
+    let mut wav_reader = WavReader::open("testsamples/nonstandard-02.wav").unwrap();
+}
+
+#[test]
 fn wide_read_should_signal_error() {
     let mut reader24 = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
         .unwrap();
