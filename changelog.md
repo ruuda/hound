@@ -1,6 +1,21 @@
 Changelog
 =========
 
+3.3.1
+-----
+
+Released 2018-02-18.
+
+**Breaking changes**:
+
+- None.
+
+Release highlights:
+
+- Hound now reads certain WAVEFORMATEX files that were previously
+  rejected incorrectly.
+- Ensures compatibility with Rust 1.4 through 1.24 stable.
+
 3.3.0
 -----
 
