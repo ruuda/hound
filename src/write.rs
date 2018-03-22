@@ -420,6 +420,10 @@ impl<W> WavWriter<W>
     /// written bytes a valid wav file, and then flushes the writer. It is still
     /// possible to write more samples after flushing.
     ///
+    /// Flush can be used for “checkpointing”. Even if after the flush there is
+    /// an IO error or the writing process dies, the file can still be read by a
+    /// compliant decoder up to the last flush.
+    ///
     /// Note that if the number of samples written is not a multiple of the
     /// channel count, the intermediate wav file will not be valid. In that case
     /// `flush()` will still flush the data and write the (invalid) wav file,
