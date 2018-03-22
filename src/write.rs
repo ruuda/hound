@@ -148,7 +148,7 @@ pub struct WavWriter<W>
     /// This is an `u32` because WAVE cannot accomodate more data.
     data_bytes_written: u32,
 
-    /// Whether `finalize_internal` has been called.
+    /// Whether the header has been finalized.
     finalized: bool,
 
     /// The buffer for the sample writer, which is recycled throughout calls to
@@ -393,16 +393,7 @@ impl<W> WavWriter<W>
         }
     }
 
-    /// Performs finalization. After calling this, the writer should be destructed.
-    fn finalize_internal(&mut self) -> Result<()> {
-        self.finalized = true;
-
-        // Flush remaining samples via the BufWriter.
-        try!(self.writer.flush());
-
-        // Extract the underlying writer and rewind it to the start, to update
-        // the header fields of which we now know the value.
-
+    fn update_header(&mut self) -> Result<()> {
         // The header minus magic and 32-bit filesize.
         let header_size = if self.extensible { 64 } else { 40 };
 
@@ -417,19 +408,41 @@ impl<W> WavWriter<W>
         // the file is now ill-formed.
         if (self.data_bytes_written / self.bytes_per_sample as u32)
             % self.spec.channels as u32 != 0 {
-            return Err(Error::UnfinishedSample);
+            Err(Error::UnfinishedSample)
+        } else {
+            Ok(())
         }
+    }
 
+    /// Updates the WAVE header and flushes the underlying writer.
+    ///
+    /// Flush writes the WAVE header to the underlying writer to make the
+    /// written bytes a valid wav file, and then flushes the writer. It is still
+    /// possible to write more samples after flushing.
+    ///
+    /// Note that if the number of samples written is not a multiple of the
+    /// channel count, the intermediate wav file will not be valid. In that case
+    /// `flush()` will still flush the data and write the (invalid) wav file,
+    /// but `Error::UnfinishedSample` will be returned afterwards.
+    ///
+    /// It is not necessary to call `finalize()` directly after `flush()`, if no
+    /// samples have been written after flushing.
+    pub fn flush(&mut self) -> Result<()> {
+        let current_pos = try!(self.writer.seek(io::SeekFrom::Current(0)));
+        try!(self.update_header());
+        try!(self.writer.flush());
+        try!(self.writer.seek(io::SeekFrom::Start(current_pos)));
         Ok(())
     }
 
-    /// Writes the parts of the WAVE format that require knowing all samples.
+    /// Updates the WAVE header (which requires knowing all samples).
     ///
     /// This method must be called after all samples have been written. If it
     /// is not called, the destructor will finalize the file, but any errors
     /// that occur in the process cannot be observed in that manner.
     pub fn finalize(mut self) -> Result<()> {
-        self.finalize_internal()
+        self.finalized = true;
+        self.update_header()
     }
 }
 
@@ -437,12 +450,11 @@ impl<W> Drop for WavWriter<W>
     where W: io::Write + io::Seek
 {
     fn drop(&mut self) {
-        // `finalize_internal` must be called only once. If that is done via
-        // `finalize`, then this method is a no-op. If the user did not
-        // finalize explicitly, then we should do it now. This can fail, but
-        // drop should not panic, so a failure is ignored silently here.
+        // If the file was not explicitly finalized (to update the headers), do
+        // it in the drop. This can fail, but drop should not panic, so a
+        // failure is ignored silently here.
         if !self.finalized {
-            let _r = self.finalize_internal();
+            let _r = self.update_header();
         }
     }
 }
