@@ -606,3 +606,46 @@ fn no_32_bps_for_float_sample_format_panics() {
 
     WavWriter::new(&mut buffer, write_spec).unwrap();
 }
+
+#[test]
+fn flush_should_produce_valid_file() {
+    use std::mem;
+    use std::io::Seek;
+
+    let mut buffer = io::Cursor::new(Vec::new());
+    let samples = &[2, 4, 5, 7, 11, 13];
+
+    {
+        let spec = WavSpec {
+            channels: 2,
+            sample_rate: 44100,
+            bits_per_sample: 16,
+            sample_format: SampleFormat::Int,
+        };
+        let mut writer = WavWriter::new(&mut buffer, spec).unwrap();
+
+        for &x in samples {
+            writer.write_sample(x).unwrap();
+        }
+
+        // We should be able to see everything up to the flush later.
+        writer.flush().unwrap();
+
+        // Write more samples. These should be in the buffer, but not read by the
+        // reader if we don't finalize the writer.
+        writer.write_sample(17).unwrap();
+        writer.write_sample(19).unwrap();
+
+        mem::forget(writer);
+    }
+
+    buffer.seek(io::SeekFrom::Start(0)).unwrap();
+
+    let mut reader = WavReader::new(&mut buffer).unwrap();
+    let read_samples: Vec<i16> = reader.samples()
+        .map(|r| r.unwrap())
+        .collect();
+
+    // We expect to see all samples up to the flush, but not the later ones.
+    assert_eq!(&read_samples[..], &samples[..]);
+}
