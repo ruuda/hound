@@ -478,6 +478,51 @@ impl WavWriter<io::BufWriter<fs::File>> {
     }
 }
 
+impl<W> WavWriter<W>
+    where W: io::Read + io::Write + io::Seek
+{
+    /// Creates a writer that appends samples to an existing file.
+    ///
+    /// This first reads the existing header to obtain the spec, then seeks to
+    /// the end of the writer. The writer then appends new samples to the end of
+    /// the file.
+    ///
+    /// The underlying writer is assumed to be at offset 0.
+    pub fn append(mut writer: W) -> Result<WavWriter<W>> {
+        let spec;
+        let len;
+        {
+            let reader = try!(::read::WavReader::new(&mut writer));
+            spec = reader.spec();
+            len = reader.len();
+        }
+
+        // Constructing the reader will have positioned the cursor at the first
+        // sample. We need to seek len * bytes_per_sample ahead to position the
+        // cursor at the end of the file.
+        // TODO: Rounding.
+        let bytes_per_sample = spec.bits_per_sample / 8;
+        let data_bytes_written = bytes_per_sample as u32 * len;
+
+        try!(writer.seek(io::SeekFrom::Current(data_bytes_written as i64)));
+
+        // TODO: This might actually corrupt the header.
+        let writer = WavWriter {
+            spec: spec,
+            bytes_per_sample: bytes_per_sample,
+            writer: writer,
+            data_bytes_written: data_bytes_written,
+            sample_writer_buffer: Vec::new(),
+            finalized: false,
+            // See also the comment in WavWriter::new constructor.
+            extensible: spec.channels > 2 || spec.bits_per_sample > 16,
+        };
+
+        Ok(writer)
+    }
+}
+
+
 /// A writer that specifically only writes integer samples of 16 bits per sample.
 ///
 /// The writer buffers written samples internally so they can be written in a
