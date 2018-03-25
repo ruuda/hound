@@ -448,6 +448,15 @@ impl<W> WavWriter<W>
         self.finalized = true;
         self.update_header()
     }
+
+    /// Returns information about the WAVE file being written.
+    ///
+    /// This is the same spec that was passed to `WavWriter::new()`. For a
+    /// writer constructed with `WavWriter::append()`, this method returns
+    /// the spec of the file being appended to.
+    pub fn spec(&self) -> WavSpec {
+        self.spec
+    }
 }
 
 impl<W> Drop for WavWriter<W>

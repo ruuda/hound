@@ -656,15 +656,15 @@ fn append_should_append() {
 
     let mut buffer = io::Cursor::new(Vec::new());
     let samples = &[2, 5, 7, 11];
+    let spec = WavSpec {
+        channels: 2,
+        sample_rate: 44100,
+        bits_per_sample: 16,
+        sample_format: SampleFormat::Int,
+    };
 
     // Write initial file.
     {
-        let spec = WavSpec {
-            channels: 2,
-            sample_rate: 44100,
-            bits_per_sample: 16,
-            sample_format: SampleFormat::Int,
-        };
         let mut writer = WavWriter::new(&mut buffer, spec).unwrap();
         for s in samples { writer.write_sample(*s); }
     }
@@ -674,6 +674,7 @@ fn append_should_append() {
     // Append samples (the same ones a second time).
     {
         let mut writer = WavWriter::append(&mut buffer).unwrap();
+        assert_eq!(writer.spec(), spec);
         for s in samples { writer.write_sample(*s); }
     }
 
