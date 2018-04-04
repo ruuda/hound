@@ -1,7 +1,6 @@
 [package]
 name = "hound-fuzz"
 version = "0.0.1"
-authors = ["Automatically generated"]
 publish = false
 
 [package.metadata]
@@ -22,8 +21,8 @@ members = ["."]
 
 [[bin]]
 name = "decode_full"
-path = "fuzzers/decode_full.rs"
+path = "fuzz_targets/decode_full.rs"
 
 [[bin]]
 name = "decode_full_honggfuzz"
-path = "fuzzers/decode_full_honggfuzz.rs"
+path = "fuzz_targets/decode_full_honggfuzz.rs"
