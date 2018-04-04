@@ -688,3 +688,55 @@ fn append_should_append() {
     // We expect to see all samples up to the flush, but not the later ones.
     assert_eq!(&read_samples[..], &[2, 5, 7, 11, 2, 5, 7, 11]);
 }
+
+#[test]
+fn append_does_not_corrupt_files() {
+    use std::io::{Read, Seek};
+    use std::fs;
+
+    let sample_files = [
+        "testsamples/pcmwaveformat-16bit-44100Hz-mono-extra.wav",
+        "testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
+        "testsamples/pcmwaveformat-8bit-44100Hz-mono.wav",
+        "testsamples/pop.wav",
+        "testsamples/waveformatex-16bit-44100Hz-mono-extra.wav",
+        "testsamples/waveformatex-16bit-44100Hz-mono.wav",
+        "testsamples/waveformatex-16bit-44100Hz-stereo.wav",
+        "testsamples/waveformatextensible-24bit-192kHz-mono.wav",
+        "testsamples/waveformatextensible-32bit-48kHz-stereo.wav",
+        "testsamples/nonstandard-01.wav",
+        "testsamples/waveformatex-8bit-11025Hz-mono.wav",
+    ];
+
+    for fname in &sample_files {
+        let mut buffer = Vec::new();
+        let mut f = fs::File::open(fname).unwrap();
+        f.read_to_end(&mut buffer).unwrap();
+
+        let samples_orig: Vec<i32>;
+        let samples_after: Vec<i32>;
+
+        // Read samples first.
+        {
+            let cursor = io::Cursor::new(&mut buffer);
+            let mut reader = WavReader::new(cursor).unwrap();
+            samples_orig = reader.samples().map(|r| r.unwrap()).collect();
+        }
+
+        // Open in append mode and append one sample.
+        {
+            let mut cursor = io::Cursor::new(&mut buffer);
+            let mut writer = WavWriter::append(cursor).unwrap();
+            writer.write_sample(41_i8).unwrap();
+        }
+
+        {
+            let cursor = io::Cursor::new(&mut buffer);
+            let mut reader = WavReader::new(cursor).unwrap();
+            samples_after = reader.samples().map(|r| r.unwrap()).collect();
+        }
+
+        assert_eq!(&samples_orig[..], &samples_after[..samples_orig.len()]);
+        assert_eq!(samples_after[samples_after.len() - 1], 41_i32);
+    }
+}
