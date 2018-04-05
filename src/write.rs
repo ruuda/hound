@@ -17,7 +17,6 @@ use std::io::Write;
 use std::path;
 use super::{Error, Result, Sample, SampleFormat, WavSpec};
 use ::read;
-use ::read::FmtKind;
 
 /// Extends the functionality of `io::Write` with additional methods.
 ///
@@ -157,8 +156,17 @@ pub struct WavWriter<W>
     /// avoid allocating frequently.
     sample_writer_buffer: Vec<u8>,
 
-    /// If true, write WAVEFORMATEXTENSIBLE instead of WAVEFORMATEX.
-    extensible: bool,
+    /// The offset of the length field of the data chunk.
+    ///
+    /// This field needs to be overwritten after all data has been written. To
+    /// support different size fmt chunks, and other chunks interspersed, the
+    /// offset is flexible.
+    data_len_offset: u32,
+}
+
+enum FmtKind {
+    PcmWaveFormat,
+    WaveFormatExtensible,
 }
 
 impl<W> WavWriter<W>
@@ -174,6 +182,16 @@ impl<W> WavWriter<W>
     /// This writes parts of the header immediately, hence a `Result` is
     /// returned.
     pub fn new(writer: W, spec: WavSpec) -> Result<WavWriter<W>> {
+        // Write the older PCMWAVEFORMAT structure if possible, because it is
+        // more widely supported. For more than two channels or more than 16
+        // bits per sample, the newer WAVEFORMATEXTENSIBLE is required. See also
+        // https://msdn.microsoft.com/en-us/library/ms713497.aspx.
+        let fmt_kind = if spec.channels > 2 || spec.bits_per_sample > 16 {
+            FmtKind::WaveFormatExtensible
+        } else {
+            FmtKind::PcmWaveFormat
+        };
+
         let mut writer = WavWriter {
             spec: spec,
             bytes_per_sample: (spec.bits_per_sample as f32 / 8.0).ceil() as u16,
@@ -181,21 +199,20 @@ impl<W> WavWriter<W>
             data_bytes_written: 0,
             sample_writer_buffer: Vec::new(),
             finalized: false,
-            // Write the older WAVEFORMAT structure if possible, because it is more
-            // widely supported. For more than two channels or more than 16 bits per
-            // sample, the newer WAVEFORMATEXTENSIBLE is required. See also
-            // https://msdn.microsoft.com/en-us/library/ms713497.aspx. We write up
-            // to the point where data should be written.
-            extensible: spec.channels > 2 || spec.bits_per_sample > 16,
+            data_len_offset: match fmt_kind {
+                FmtKind::WaveFormatExtensible => 64,
+                FmtKind::PcmWaveFormat => 40,
+            },
         };
 
-        try!(writer.write_headers());
+        // Write headers, up to the point where data should be written.
+        try!(writer.write_headers(fmt_kind));
 
         Ok(writer)
     }
 
     /// Writes the RIFF WAVE header, fmt chunk, and data chunk header.
-    fn write_headers(&mut self) -> io::Result<()> {
+    fn write_headers(&mut self, fmt_kind: FmtKind) -> io::Result<()> {
         // Write to an in-memory buffer before writing to the underlying writer.
         let mut header = [0u8; 68];
 
@@ -211,9 +228,13 @@ impl<W> WavWriter<W>
             try!(buffer.write_all("WAVE".as_bytes()));
             try!(buffer.write_all("fmt ".as_bytes()));
 
-            match self.extensible {
-                true => try!(self.write_waveformatextensible(&mut buffer)),
-                false => try!(self.write_waveformatex(&mut buffer)),
+            match fmt_kind {
+                FmtKind::PcmWaveFormat => {
+                    try!(self.write_pcmwaveformat(&mut buffer));
+                }
+                FmtKind::WaveFormatExtensible => {
+                    try!(self.write_waveformatextensible(&mut buffer));
+                }
             }
 
             // Finally the header of the "data" chunk. The number of bytes
@@ -223,15 +244,16 @@ impl<W> WavWriter<W>
             try!(buffer.write_le_u32(0));
         }
 
-        let header_len = if self.extensible { 68 } else { 44 };
+        // The data length field are the last 4 bytes of the header.
+        let header_len = self.data_len_offset as usize + 4;
 
         self.writer.write_all(&header[..header_len])
     }
 
     /// Writes the spec as a WAVEFORMAT structure.
     ///
-    /// The WAVEFORMAT struct is a subset of both WAVEFORMATEX
-    /// and WAVEFORMATEXTENSIBLE.
+    /// The `WAVEFORMAT` struct is a subset of both `WAVEFORMATEX` and
+    /// `WAVEFORMATEXTENSIBLE`. This does not write the `wFormatTag` member.
     fn write_waveformat(&self, buffer: &mut io::Cursor<&mut [u8]>) -> io::Result<()> {
         let spec = &self.spec;
         // The field nChannels.
@@ -252,13 +274,13 @@ impl<W> WavWriter<W>
         Ok(())
     }
 
-    /// Writes the content of the fmt chunk as WAVEFORMATEX struct.
-    fn write_waveformatex(&mut self, buffer: &mut io::Cursor<&mut [u8]>) -> io::Result<()> {
+    /// Writes the content of the fmt chunk as PCMWAVEFORMAT struct.
+    fn write_pcmwaveformat(&mut self, buffer: &mut io::Cursor<&mut [u8]>) -> io::Result<()> {
         // Write the size of the WAVE header chunk.
         try!(buffer.write_le_u32(16));
 
-        // The following is based on the WAVEFORMATEX struct as documented at
-        // https://msdn.microsoft.com/en-us/library/ms713497.aspx. See also
+        // The following is based on the PCMWAVEFORMAT struct as documented at
+        // https://msdn.microsoft.com/en-us/library/ms712832.aspx. See also
         // http://soundfile.sapp.org/doc/WaveFormat/.
 
         // The field wFormatTag
@@ -283,6 +305,10 @@ impl<W> WavWriter<W>
 
         // The field wBitsPerSample, the real number of bits per sample.
         try!(buffer.write_le_u16(self.spec.bits_per_sample));
+
+        // Note: for WAVEFORMATEX, there would be another 16-byte field `cbSize`
+        // here that should be set to zero. And the header size would be 18
+        // rather than 16.
 
         Ok(())
     }
@@ -396,16 +422,14 @@ impl<W> WavWriter<W>
     }
 
     fn update_header(&mut self) -> Result<()> {
-        // The header minus magic and 32-bit filesize.
-        let header_size = if self.extensible { 64 } else { 40 };
+        // The header size minus magic and 32-bit filesize (8 bytes).
+        // The data chunk length (4 bytes) is the last part of the header.
+        let header_size = self.data_len_offset + 4 - 8;
+        let file_size = self.data_bytes_written + header_size;
 
-        // TODO: In the case of append, this may not be accurate any more.
-        // Also, the offset to write the data chunk size might be wrong. Better
-        // store it as a member rather than inferring it here.
-        let file_size = self.data_bytes_written + (header_size - 4);
         try!(self.writer.seek(io::SeekFrom::Start(4)));
         try!(self.writer.write_le_u32(file_size));
-        try!(self.writer.seek(io::SeekFrom::Start(header_size as u64)));
+        try!(self.writer.seek(io::SeekFrom::Start(self.data_len_offset as u64)));
         try!(self.writer.write_le_u32(self.data_bytes_written));
 
         // Signal error if the last sample was not finished, but do so after
@@ -508,15 +532,9 @@ impl<W> WavWriter<W>
             try!(read::read_until_data(&mut writer))
         };
 
-        // If the format tag was either a WAVEFORMAT or WAVEFORMATEXTENSIBLE
-        // struct, then Hound can write it, so we can update the header. But if
-        // it was an other format tag that we can read but not write, then bail
-        // out, as we would not know how to update the header.
-        let is_extensible = match spec_ex.fmt_kind {
-            FmtKind::WaveFormat => false,
-            FmtKind::WaveFormatEx => return Err(Error::Unsupported),
-            FmtKind::WaveFormatExtensible => true,
-        };
+        // Record the position of the data chunk length, so we can overwrite it
+        // later.
+        let data_len_offset = try!(writer.seek(io::SeekFrom::Current(0))) as u32 - 4;
 
         let spec = spec_ex.spec;
         let num_samples = data_len / spec_ex.bytes_per_sample as u32;
@@ -537,7 +555,7 @@ impl<W> WavWriter<W>
             data_bytes_written: data_len,
             sample_writer_buffer: Vec::new(),
             finalized: false,
-            extensible: is_extensible,
+            data_len_offset: data_len_offset,
         };
 
         Ok(writer)

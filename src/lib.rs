@@ -734,6 +734,7 @@ fn append_does_not_corrupt_files() {
                 Err(err) => panic!("Unexpected error {}.", err),
             };
             writer.write_sample(41_i8).unwrap();
+            writer.write_sample(43_i8).unwrap();
         }
 
         {
@@ -744,7 +745,8 @@ fn append_does_not_corrupt_files() {
         }
 
         assert_eq!(&samples_orig[..], &samples_after[..samples_orig.len()]);
-        assert_eq!(samples_after[samples_after.len() - 1], 41_i32);
+        assert_eq!(samples_after[samples_after.len() - 2], 41_i32);
+        assert_eq!(samples_after[samples_after.len() - 1], 43_i32);
 
         println!("ok");
     }
