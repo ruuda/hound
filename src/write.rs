@@ -526,6 +526,11 @@ impl<W> WavWriter<W>
     /// the file.
     ///
     /// The underlying writer is assumed to be at offset 0.
+    ///
+    /// If the existing file includes a fact chunk, it will not be updated after
+    /// appending, and hence become outdated. For files produced by Hound this
+    /// is not an issue, because Hound never writes a fact chunk. For all the
+    /// formats that Hound can write, the fact chunk is redundant.
     pub fn append(mut writer: W) -> Result<WavWriter<W>> {
         let (spec_ex, data_len) = {
             try!(read::read_wave_header(&mut writer));
