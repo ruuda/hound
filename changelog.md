@@ -5,6 +5,9 @@ Unreleased
 ----------
 
 - Expose `read::read_wave_header()`.
+- Hound fails earlier when requesting to write an unsupported spec:
+  `WavWriter::new()` will already return `Error::Unsupported`. Previously this
+  error was returned when writing a sample.
 
 3.3.1
 -----

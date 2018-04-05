@@ -194,7 +194,7 @@ impl<W> WavWriter<W>
 
         let mut writer = WavWriter {
             spec: spec,
-            bytes_per_sample: (spec.bits_per_sample as f32 / 8.0).ceil() as u16,
+            bytes_per_sample: (spec.bits_per_sample + 7) / 8,
             writer: writer,
             data_bytes_written: 0,
             sample_writer_buffer: Vec::new(),
@@ -204,6 +204,21 @@ impl<W> WavWriter<W>
                 FmtKind::PcmWaveFormat => 40,
             },
         };
+
+        // Hound can only write those bit depths. If something else was
+        // requested, fail early, rather than writing a header but then failing
+        // at the first sample.
+        let supported = match spec.bits_per_sample {
+            8 => true,
+            16 => true,
+            24 => true,
+            32 => true,
+            _ => false,
+        };
+
+        if !supported {
+            return Err(Error::Unsupported)
+        }
 
         // Write headers, up to the point where data should be written.
         try!(writer.write_headers(fmt_kind));
@@ -543,6 +558,20 @@ impl<W> WavWriter<W>
 
         let spec = spec_ex.spec;
         let num_samples = data_len / spec_ex.bytes_per_sample as u32;
+
+        // Hound cannot read or write other bit depths than those, so rather
+        // than refusing to write later, fail early.
+        let supported = match (spec_ex.bytes_per_sample, spec.bits_per_sample) {
+            (1, 8) => true,
+            (2, 16) => true,
+            (3, 24) => true,
+            (4, 32) => true,
+            _ => false,
+        };
+
+        if !supported {
+            return Err(Error::Unsupported);
+        }
 
         // The number of samples must be a multiple of the number of channels,
         // otherwise the last inter-channel sample would not have data for all
