@@ -719,16 +719,17 @@ fn append_does_not_corrupt_files() {
         let samples_after: Vec<i32>;
 
         // Read samples first.
+        let mut cursor = io::Cursor::new(buffer);
         {
-            let cursor = io::Cursor::new(&mut buffer);
-            let mut reader = WavReader::new(cursor).unwrap();
+            let mut reader = WavReader::new(&mut cursor).unwrap();
             samples_orig = reader.samples().map(|r| r.unwrap()).collect();
         }
+        buffer = cursor.into_inner();
 
         // Open in append mode and append one sample.
+        let mut cursor = io::Cursor::new(buffer);
         {
-            let mut cursor = io::Cursor::new(&mut buffer);
-            let mut writer = match WavWriter::append(cursor) {
+            let mut writer = match WavWriter::append(&mut cursor) {
                 Ok(w) => w,
                 Err(Error::Unsupported) => continue,
                 Err(err) => panic!("Unexpected error {}.", err),
@@ -736,9 +737,10 @@ fn append_does_not_corrupt_files() {
             writer.write_sample(41_i8).unwrap();
             writer.write_sample(43_i8).unwrap();
         }
+        buffer = cursor.into_inner();
 
         {
-            let cursor = io::Cursor::new(&mut buffer);
+            let cursor = io::Cursor::new(buffer);
             let mut reader = WavReader::new(cursor)
                 .expect("Reading wav failed after append.");
             samples_after = reader.samples().map(|r| r.unwrap()).collect();
