@@ -16,14 +16,21 @@ use std::fmt::Debug;
 fn try_append<S, T>(mut buffer: Vec<u8>, sample_narrow: S, sample_wide: T)
 where S: hound::Sample + Copy + Debug + PartialEq,
       T: hound::Sample + Copy + Debug + PartialEq {
-    let samples_orig: Vec<T>;
+    let mut samples_orig: Vec<T> = Vec::new();
     let samples_after: Vec<T>;
 
     // Read samples first.
     {
         let cursor = io::Cursor::new(&mut buffer);
         let mut reader = hound::WavReader::new(cursor).unwrap();
-        samples_orig = reader.samples().map(|r| r.unwrap()).collect();
+        for r in reader.samples() {
+            match r {
+                Ok(x) => samples_orig.push(x),
+                // If reading fails, then don't attempt to append. We are only
+                // concerned with appending to valid files.
+                Err(..) => return,
+            }
+        }
     }
 
     // Open in append mode and append one sample for each channel.

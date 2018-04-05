@@ -601,6 +601,16 @@ impl<R> WavReader<R>
 
         let num_samples = data_len / spec_ex.bytes_per_sample as u32;
 
+        // It could be that num_samples * bytes_per_sample < data_len.
+        // If data_len is not a multiple of bytes_per_sample, there is some
+        // trailing data. Either somebody is playing some steganography game,
+        // but more likely something is very wrong, and we should refuse to
+        // decode the file, as it is invalid.
+        if num_samples * spec_ex.bytes_per_sample as u32 != data_len {
+            let msg = "data chunk length is not a multiple of sample size";
+            return Err(Error::FormatError(msg));
+        }
+
         // The number of samples must be a multiple of the number of channels,
         // otherwise the last inter-channel sample would not have data for all
         // channels.

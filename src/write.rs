@@ -559,6 +559,13 @@ impl<W> WavWriter<W>
         let spec = spec_ex.spec;
         let num_samples = data_len / spec_ex.bytes_per_sample as u32;
 
+        // There must not be trailing bytes in the data chunk, otherwise the
+        // bytes we write will be off.
+        if num_samples * spec_ex.bytes_per_sample as u32 != data_len {
+            let msg = "data chunk length is not a multiple of sample size";
+            return Err(Error::FormatError(msg));
+        }
+
         // Hound cannot read or write other bit depths than those, so rather
         // than refusing to write later, fail early.
         let supported = match (spec_ex.bytes_per_sample, spec.bits_per_sample) {
