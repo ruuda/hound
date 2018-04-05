@@ -16,6 +16,8 @@ use std::mem;
 use std::io::Write;
 use std::path;
 use super::{Error, Result, Sample, SampleFormat, WavSpec};
+use ::read;
+use ::read::FmtKind;
 
 /// Extends the functionality of `io::Write` with additional methods.
 ///
@@ -499,11 +501,19 @@ impl<W> WavWriter<W>
     /// The underlying writer is assumed to be at offset 0.
     pub fn append(mut writer: W) -> Result<WavWriter<W>> {
         let (spec_ex, data_len) = {
-            try!(::read::read_wave_header(&mut writer));
-            try!(::read::read_until_data(&mut writer))
+            try!(read::read_wave_header(&mut writer));
+            try!(read::read_until_data(&mut writer))
         };
 
-        // TODO: Verify that spec_ex wave format is something that we can write.
+        // If the format tag was either a WAVEFORMATEX or WAVEFORMATEXTENSIBLE
+        // struct, then Hound can write it, so we can update the header. But if
+        // it was an other format tag that we can read but not write, then bail
+        // out, as we would not know how to update the header.
+        let is_extensible = match spec_ex.fmt_kind {
+            FmtKind::WaveFormat => return Err(Error::Unsupported),
+            FmtKind::WaveFormatEx => false,
+            FmtKind::WaveFormatExtensible => true,
+        };
 
         let spec = spec_ex.spec;
         let num_samples = data_len / spec_ex.bytes_per_sample as u32;
@@ -524,9 +534,7 @@ impl<W> WavWriter<W>
             data_bytes_written: data_len,
             sample_writer_buffer: Vec::new(),
             finalized: false,
-            // TODO: Extract from spec_ex.
-            // See also the comment in WavWriter::new constructor.
-            extensible: spec.channels > 2 || spec.bits_per_sample > 16,
+            extensible: is_extensible,
         };
 
         Ok(writer)

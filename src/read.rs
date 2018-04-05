@@ -193,6 +193,13 @@ struct ChunkHeader {
     pub len: u32,
 }
 
+#[derive(Clone, Copy)]
+pub enum FmtKind {
+    WaveFormat,
+    WaveFormatEx,
+    WaveFormatExtensible,
+}
+
 /// Specifies properties of the audio data, as well as the layout of the stream.
 #[derive(Clone, Copy)]
 pub struct WavSpecEx {
@@ -204,6 +211,9 @@ pub struct WavSpecEx {
 
     /// The number of bytes used to store a sample.
     pub bytes_per_sample: u16,
+
+    /// The kind of struct used in the fmt chunk.
+    pub fmt_kind: FmtKind,
 }
 
 /// A reader that reads the WAVE format from the underlying reader.
@@ -487,7 +497,12 @@ impl<R> WavReader<R>
 
         let spec_ex = WavSpecEx {
             spec: spec,
-            bytes_per_sample: spec.bits_per_sample / 8
+            bytes_per_sample: spec.bits_per_sample / 8,
+            fmt_kind: if is_wave_format_ex {
+                FmtKind::WaveFormatEx
+            } else {
+                FmtKind::WaveFormat
+            },
         };
         Ok(spec_ex)
     }
@@ -527,6 +542,11 @@ impl<R> WavReader<R>
                 ..spec
             },
             bytes_per_sample: spec.bits_per_sample / 8,
+            fmt_kind: if is_wave_format_ex {
+                FmtKind::WaveFormatEx
+            } else {
+                FmtKind::WaveFormat
+            },
         };
         Ok(spec_ex)
     }
@@ -585,6 +605,7 @@ impl<R> WavReader<R>
                 ..spec
             },
             bytes_per_sample: spec.bits_per_sample / 8,
+            fmt_kind: FmtKind::WaveFormatExtensible,
         };
         Ok(spec_ex)
     }
