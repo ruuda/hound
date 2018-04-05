@@ -26,3 +26,7 @@ path = "fuzz_targets/decode_full.rs"
 [[bin]]
 name = "decode_full_honggfuzz"
 path = "fuzz_targets/decode_full_honggfuzz.rs"
+
+[[bin]]
+name = "append"
+path = "fuzz_targets/append.rs"

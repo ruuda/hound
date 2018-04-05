@@ -729,11 +729,7 @@ fn append_does_not_corrupt_files() {
         // Open in append mode and append one sample.
         let mut cursor = io::Cursor::new(buffer);
         {
-            let mut writer = match WavWriter::append(&mut cursor) {
-                Ok(w) => w,
-                Err(Error::Unsupported) => continue,
-                Err(err) => panic!("Unexpected error {}.", err),
-            };
+            let mut writer = WavWriter::append(&mut cursor).unwrap();
             writer.write_sample(41_i8).unwrap();
             writer.write_sample(43_i8).unwrap();
         }
