@@ -260,7 +260,9 @@ pub struct WavIntoSamples<R, S> {
 /// by reading 12 bytes of the header. If an `Ok` is returned, the file is
 /// likely a wav file. If an `Err` is returned, it is definitely not a wav
 /// file.
-pub fn read_wave_header<R: io::Read>(reader: &mut R) -> Result<u32> {
+///
+/// The returned file size cannot be larger than 2<sup>32</sup> + 7 bytes.
+pub fn read_wave_header<R: io::Read>(reader: &mut R) -> Result<u64> {
     // Every WAVE file starts with the four bytes 'RIFF' and a file length.
     // TODO: the old approach of having a slice on the stack and reading
     // into it is more cumbersome, but also avoids a heap allocation. Is
@@ -279,7 +281,7 @@ pub fn read_wave_header<R: io::Read>(reader: &mut R) -> Result<u32> {
 
     // The stored file length does not include the "RIFF" magic and 4-byte
     // length field, so the total size is 8 bytes more than what is stored.
-    Ok(file_len + 8)
+    Ok(file_len as u64 + 8)
 }
 
 /// Reads chunks until a data chunk is encountered.
