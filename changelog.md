@@ -49,7 +49,7 @@ Released 2017-10-14.
 
 Release highlights:
 
-- Hound will now write the older WAVEFORMATEX format whenever possible, rather
+- Hound will now write the older PCMWAVEFORMAT format whenever possible, rather
   than the newer WAVEFORMATEXTENSIBLE, to improve compatibility.
 - Certain nonstandard files (produced among others by “Pro Tools”) can now
   be read.
