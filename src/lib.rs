@@ -320,6 +320,19 @@ pub struct WavSpec {
     pub sample_format: SampleFormat,
 }
 
+/// Specifies properties of the audio data, as well as the layout of the stream.
+#[derive(Clone, Copy)]
+struct WavSpecEx {
+    /// The normal information about the audio data.
+    ///
+    /// Bits per sample here is the number of _used_ bits per sample, not the
+    /// number of bits used to _store_ a sample.
+    spec: WavSpec,
+
+    /// The number of bytes used to store a sample.
+    bytes_per_sample: u16,
+}
+
 /// The error type for operations on `WavReader` and `WavWriter`.
 #[derive(Debug)]
 pub enum Error {
@@ -709,6 +722,8 @@ fn append_does_not_corrupt_files() {
     ];
 
     for fname in &sample_files {
+        print!("testing {} ... ", fname);
+
         let mut buffer = Vec::new();
         let mut f = fs::File::open(fname).unwrap();
         f.read_to_end(&mut buffer).unwrap();
@@ -732,11 +747,14 @@ fn append_does_not_corrupt_files() {
 
         {
             let cursor = io::Cursor::new(&mut buffer);
-            let mut reader = WavReader::new(cursor).unwrap();
+            let mut reader = WavReader::new(cursor)
+                .expect("Reading wav failed after append.");
             samples_after = reader.samples().map(|r| r.unwrap()).collect();
         }
 
         assert_eq!(&samples_orig[..], &samples_after[..samples_orig.len()]);
         assert_eq!(samples_after[samples_after.len() - 1], 41_i32);
+
+        println!("ok");
     }
 }

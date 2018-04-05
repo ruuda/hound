@@ -498,31 +498,33 @@ impl<W> WavWriter<W>
     ///
     /// The underlying writer is assumed to be at offset 0.
     pub fn append(mut writer: W) -> Result<WavWriter<W>> {
-        let spec;
-        let len;
-        {
-            let reader = try!(::read::WavReader::new(&mut writer));
-            spec = reader.spec();
-            len = reader.len();
+        let (spec_ex, data_len) = {
+            try!(::read::read_wave_header(&mut writer));
+            try!(::read::WavReader::read_until_data(&mut writer))
+        };
+
+        // TODO: Verify that spec_ex wave format is something that we can write.
+
+        let spec = spec_ex.spec;
+        let num_samples = data_len / spec_ex.bytes_per_sample as u32;
+
+        // The number of samples must be a multiple of the number of channels,
+        // otherwise the last inter-channel sample would not have data for all
+        // channels.
+        if num_samples % spec_ex.spec.channels as u32 != 0 {
+            return Err(Error::FormatError("invalid data chunk length"));
         }
 
-        // Constructing the reader will have positioned the cursor at the first
-        // sample. We need to seek len * bytes_per_sample ahead to position the
-        // cursor at the end of the file.
-        // TODO: Rounding.
-        let bytes_per_sample = spec.bits_per_sample / 8;
-        let data_bytes_written = bytes_per_sample as u32 * len;
+        try!(writer.seek(io::SeekFrom::Current(data_len as i64)));
 
-        try!(writer.seek(io::SeekFrom::Current(data_bytes_written as i64)));
-
-        // TODO: This might actually corrupt the header.
         let writer = WavWriter {
             spec: spec,
-            bytes_per_sample: bytes_per_sample,
+            bytes_per_sample: spec_ex.bytes_per_sample,
             writer: writer,
-            data_bytes_written: data_bytes_written,
+            data_bytes_written: data_len,
             sample_writer_buffer: Vec::new(),
             finalized: false,
+            // TODO: Extract from spec_ex.
             // See also the comment in WavWriter::new constructor.
             extensible: spec.channels > 2 || spec.bits_per_sample > 16,
         };

@@ -16,7 +16,7 @@ use std::io;
 use std::marker;
 use std::mem;
 use std::path;
-use super::{Error, Result, Sample, SampleFormat, WavSpec};
+use super::{Error, Result, Sample, SampleFormat, WavSpec, WavSpecEx};
 
 /// Extends the functionality of `io::Read` with additional methods.
 ///
@@ -193,19 +193,6 @@ struct ChunkHeader {
     pub len: u32,
 }
 
-/// Specifies properties of the audio data, as well as the layout of the stream.
-#[derive(Clone, Copy)]
-struct WavSpecEx {
-    /// The normal information about the audio data.
-    ///
-    /// Bits per sample here is the number of _used_ bits per sample, not the
-    /// number of bits used to _store_ a sample.
-    spec: WavSpec,
-
-    /// The number of bytes used to store a sample.
-    bytes_per_sample: u16,
-}
-
 /// A reader that reads the WAVE format from the underlying reader.
 ///
 /// A `WavReader` is a streaming reader. It reads data from the underlying
@@ -254,30 +241,34 @@ pub struct WavIntoSamples<R, S> {
     phantom_sample: marker::PhantomData<S>,
 }
 
+/// Reads the RIFF WAVE header, returns the supposed file size.
+///
+/// This function can be used to quickly check if the file could be a wav file
+/// by reading only a few bytes. If an `Ok` is returned, the file is probably a
+/// wav file. If an `Err` is returned, it is definitely not a wav file.
+pub fn read_wave_header<R: io::Read>(reader: &mut R) -> Result<u32> {
+    // Every WAVE file starts with the four bytes 'RIFF' and a file length.
+    // TODO: the old approach of having a slice on the stack and reading
+    // into it is more cumbersome, but also avoids a heap allocation. Is
+    // the compiler smart enough to avoid the heap allocation anyway? I
+    // would not expect it to be.
+    if b"RIFF" != &try!(reader.read_bytes(4))[..] {
+        return Err(Error::FormatError("no RIFF tag found"));
+    }
+
+    let file_len = try!(reader.read_le_u32());
+
+    // Next four bytes indicate the file type, which should be WAVE.
+    if b"WAVE" != &try!(reader.read_bytes(4))[..] {
+        return Err(Error::FormatError("no WAVE tag found"));
+    }
+
+    Ok(file_len)
+}
+
 impl<R> WavReader<R>
     where R: io::Read
 {
-    /// Reads the RIFF WAVE header, returns the supposed file size.
-    fn read_wave_header(reader: &mut R) -> Result<u32> {
-        // Every WAVE file starts with the four bytes 'RIFF' and a file length.
-        // TODO: the old approach of having a slice on the stack and reading
-        // into it is more cumbersome, but also avoids a heap allocation. Is
-        // the compiler smart enough to avoid the heap allocation anyway? I
-        // would not expect it to be.
-        if b"RIFF" != &try!(reader.read_bytes(4))[..] {
-            return Err(Error::FormatError("no RIFF tag found"));
-        }
-
-        let file_len = try!(reader.read_le_u32());
-
-        // Next four bytes indicate the file type, which should be WAVE.
-        if b"WAVE" != &try!(reader.read_bytes(4))[..] {
-            return Err(Error::FormatError("no WAVE tag found"));
-        }
-
-        Ok(file_len)
-    }
-
     /// Attempts to read an 8-byte chunk header.
     fn read_chunk_header(reader: &mut R) -> Result<ChunkHeader> {
         let mut kind_str = [0; 4];
@@ -587,7 +578,7 @@ impl<R> WavReader<R>
     /// The header is read immediately. Reading the data will be done on
     /// demand.
     pub fn new(mut reader: R) -> Result<WavReader<R>> {
-        try!(WavReader::read_wave_header(&mut reader));
+        try!(read_wave_header(&mut reader));
         let (spec_ex, data_len) = try!(WavReader::read_until_data(&mut reader));
 
         let num_samples = data_len / spec_ex.bytes_per_sample as u32;

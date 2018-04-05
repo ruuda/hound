@@ -1,6 +1,11 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+- Expose `read::read_wave_header()`.
+
 3.3.1
 -----
 
