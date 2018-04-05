@@ -666,19 +666,19 @@ fn append_should_append() {
     // Write initial file.
     {
         let mut writer = WavWriter::new(&mut buffer, spec).unwrap();
-        for s in samples { writer.write_sample(*s); }
+        for s in samples { writer.write_sample(*s).unwrap(); }
     }
 
-    buffer.seek(io::SeekFrom::Start(0));
+    buffer.seek(io::SeekFrom::Start(0)).unwrap();
 
     // Append samples (the same ones a second time).
     {
         let mut writer = WavWriter::append(&mut buffer).unwrap();
         assert_eq!(writer.spec(), spec);
-        for s in samples { writer.write_sample(*s); }
+        for s in samples { writer.write_sample(*s).unwrap(); }
     }
 
-    buffer.seek(io::SeekFrom::Start(0));
+    buffer.seek(io::SeekFrom::Start(0)).unwrap();
 
     let mut reader = WavReader::new(&mut buffer).unwrap();
     let read_samples: Vec<i16> = reader.samples()
@@ -691,7 +691,7 @@ fn append_should_append() {
 
 #[test]
 fn append_does_not_corrupt_files() {
-    use std::io::{Read, Seek};
+    use std::io::Read;
     use std::fs;
 
     let sample_files = [
@@ -728,7 +728,11 @@ fn append_does_not_corrupt_files() {
         // Open in append mode and append one sample.
         {
             let mut cursor = io::Cursor::new(&mut buffer);
-            let mut writer = WavWriter::append(cursor).unwrap();
+            let mut writer = match WavWriter::append(cursor) {
+                Ok(w) => w,
+                Err(Error::Unsupported) => continue,
+                Err(err) => panic!("Unexpected error {}.", err),
+            };
             writer.write_sample(41_i8).unwrap();
         }
 

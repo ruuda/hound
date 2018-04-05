@@ -399,6 +399,9 @@ impl<W> WavWriter<W>
         // The header minus magic and 32-bit filesize.
         let header_size = if self.extensible { 64 } else { 40 };
 
+        // TODO: In the case of append, this may not be accurate any more.
+        // Also, the offset to write the data chunk size might be wrong. Better
+        // store it as a member rather than inferring it here.
         let file_size = self.data_bytes_written + (header_size - 4);
         try!(self.writer.seek(io::SeekFrom::Start(4)));
         try!(self.writer.write_le_u32(file_size));
@@ -505,13 +508,13 @@ impl<W> WavWriter<W>
             try!(read::read_until_data(&mut writer))
         };
 
-        // If the format tag was either a WAVEFORMATEX or WAVEFORMATEXTENSIBLE
+        // If the format tag was either a WAVEFORMAT or WAVEFORMATEXTENSIBLE
         // struct, then Hound can write it, so we can update the header. But if
         // it was an other format tag that we can read but not write, then bail
         // out, as we would not know how to update the header.
         let is_extensible = match spec_ex.fmt_kind {
-            FmtKind::WaveFormat => return Err(Error::Unsupported),
-            FmtKind::WaveFormatEx => false,
+            FmtKind::WaveFormat => false,
+            FmtKind::WaveFormatEx => return Err(Error::Unsupported),
             FmtKind::WaveFormatExtensible => true,
         };
 
