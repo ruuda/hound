@@ -257,8 +257,11 @@ pub struct WavIntoSamples<R, S> {
 /// Reads the RIFF WAVE header, returns the supposed file size.
 ///
 /// This function can be used to quickly check if the file could be a wav file
-/// by reading only a few bytes. If an `Ok` is returned, the file is probably a
-/// wav file. If an `Err` is returned, it is definitely not a wav file.
+/// by reading 12 bytes of the header. If an `Ok` is returned, the file is
+/// likely a wav file. If an `Err` is returned, it is definitely not a wav
+/// file.
+///
+/// The returned file size does not include the 8-byte RIFF header.
 pub fn read_wave_header<R: io::Read>(reader: &mut R) -> Result<u32> {
     // Every WAVE file starts with the four bytes 'RIFF' and a file length.
     // TODO: the old approach of having a slice on the stack and reading
