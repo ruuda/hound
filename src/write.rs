@@ -500,7 +500,7 @@ impl<W> WavWriter<W>
     pub fn append(mut writer: W) -> Result<WavWriter<W>> {
         let (spec_ex, data_len) = {
             try!(::read::read_wave_header(&mut writer));
-            try!(::read::WavReader::read_until_data(&mut writer))
+            try!(::read::read_until_data(&mut writer))
         };
 
         // TODO: Verify that spec_ex wave format is something that we can write.

@@ -16,7 +16,7 @@ use std::io;
 use std::marker;
 use std::mem;
 use std::path;
-use super::{Error, Result, Sample, SampleFormat, WavSpec, WavSpecEx};
+use super::{Error, Result, Sample, SampleFormat, WavSpec};
 
 /// Extends the functionality of `io::Read` with additional methods.
 ///
@@ -193,6 +193,19 @@ struct ChunkHeader {
     pub len: u32,
 }
 
+/// Specifies properties of the audio data, as well as the layout of the stream.
+#[derive(Clone, Copy)]
+pub struct WavSpecEx {
+    /// The normal information about the audio data.
+    ///
+    /// Bits per sample here is the number of _used_ bits per sample, not the
+    /// number of bits used to _store_ a sample.
+    pub spec: WavSpec,
+
+    /// The number of bytes used to store a sample.
+    pub bytes_per_sample: u16,
+}
+
 /// A reader that reads the WAVE format from the underlying reader.
 ///
 /// A `WavReader` is a streaming reader. It reads data from the underlying
@@ -264,6 +277,53 @@ pub fn read_wave_header<R: io::Read>(reader: &mut R) -> Result<u32> {
     }
 
     Ok(file_len)
+}
+
+/// Reads chunks until a data chunk is encountered.
+///
+/// Returns the information from the fmt chunk and the length of the data
+/// chunk in bytes. Afterwards, the reader will be positioned at the first
+/// content byte of the data chunk.
+pub fn read_until_data<R: io::Read>(mut reader: R) -> Result<(WavSpecEx, u32)> {
+    let mut spec_opt = None;
+
+    loop {
+        let header = try!(WavReader::read_chunk_header(&mut reader));
+        match header.kind {
+            ChunkKind::Fmt => {
+                let spec = try!(WavReader::read_fmt_chunk(&mut reader, header.len));
+                spec_opt = Some(spec);
+            }
+            ChunkKind::Fact => {
+                // All (compressed) non-PCM formats must have a fact chunk
+                // (Rev. 3 documentation). The chunk contains at least one
+                // value, the number of samples in the file.
+                //
+                // The number of samples field is redundant for sampled
+                // data, since the Data chunk indicates the length of the
+                // data. The number of samples can be determined from the
+                // length of the data and the container size as determined
+                // from the Format chunk.
+                // http://www-mmsp.ece.mcgill.ca/documents/audioformats/wave/wave.html
+                let _samples_per_channel = reader.read_le_u32();
+            }
+            ChunkKind::Data => {
+                // The "fmt" chunk must precede the "data" chunk. Any
+                // chunks that come after the data chunk will be ignored.
+                if let Some(spec) = spec_opt {
+                    return Ok((spec, header.len));
+                } else {
+                    return Err(Error::FormatError("missing fmt chunk"));
+                }
+            }
+            ChunkKind::Unknown => {
+                // Ignore the chunk; skip all of its bytes.
+                try!(reader.skip_bytes(header.len as usize));
+            }
+        }
+        // If no data chunk is ever encountered, the function will return
+        // via one of the try! macros that return an Err on end of file.
+    }
 }
 
 impl<R> WavReader<R>
@@ -526,60 +586,13 @@ impl<R> WavReader<R>
         Ok(spec_ex)
     }
 
-    /// Reads chunks until a data chunk is encountered.
-    ///
-    /// Returns the information from the fmt chunk and the length of the data
-    /// chunk in bytes. Afterwards, the reader will be positioned at the first
-    /// content byte of the data chunk.
-    fn read_until_data(mut reader: R) -> Result<(WavSpecEx, u32)> {
-        let mut spec_opt = None;
-
-        loop {
-            let header = try!(WavReader::read_chunk_header(&mut reader));
-            match header.kind {
-                ChunkKind::Fmt => {
-                    let spec = try!(WavReader::read_fmt_chunk(&mut reader, header.len));
-                    spec_opt = Some(spec);
-                }
-                ChunkKind::Fact => {
-                    // All (compressed) non-PCM formats must have a fact chunk
-                    // (Rev. 3 documentation). The chunk contains at least one
-                    // value, the number of samples in the file.
-                    //
-                    // The number of samples field is redundant for sampled
-                    // data, since the Data chunk indicates the length of the
-                    // data. The number of samples can be determined from the
-                    // length of the data and the container size as determined
-                    // from the Format chunk.
-                    // http://www-mmsp.ece.mcgill.ca/documents/audioformats/wave/wave.html
-                    let _samples_per_channel = reader.read_le_u32();
-                }
-                ChunkKind::Data => {
-                    // The "fmt" chunk must precede the "data" chunk. Any
-                    // chunks that come after the data chunk will be ignored.
-                    if let Some(spec) = spec_opt {
-                        return Ok((spec, header.len));
-                    } else {
-                        return Err(Error::FormatError("missing fmt chunk"));
-                    }
-                }
-                ChunkKind::Unknown => {
-                    // Ignore the chunk; skip all of its bytes.
-                    try!(reader.skip_bytes(header.len as usize));
-                }
-            }
-            // If no data chunk is ever encountered, the function will return
-            // via one of the try! macros that return an Err on end of file.
-        }
-    }
-
     /// Attempts to create a reader that reads the WAVE format.
     ///
     /// The header is read immediately. Reading the data will be done on
     /// demand.
     pub fn new(mut reader: R) -> Result<WavReader<R>> {
         try!(read_wave_header(&mut reader));
-        let (spec_ex, data_len) = try!(WavReader::read_until_data(&mut reader));
+        let (spec_ex, data_len) = try!(read_until_data(&mut reader));
 
         let num_samples = data_len / spec_ex.bytes_per_sample as u32;
 
