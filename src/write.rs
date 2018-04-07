@@ -503,6 +503,23 @@ impl<W> WavWriter<W>
     pub fn spec(&self) -> WavSpec {
         self.spec
     }
+
+    /// Returns the duration of the file written so far, in samples.
+    ///
+    /// The duration is independent of the number of channels. It is expressed
+    /// in units of samples. The duration in seconds can be obtained by
+    /// dividing this number by the sample rate.
+    pub fn duration(&self) -> u32 {
+        self.data_bytes_written / (self.bytes_per_sample as u32 * self.spec.channels as u32)
+    }
+
+    /// Returns the number of samples in the file written so far.
+    ///
+    /// The length of the file is its duration (in samples) times the number of
+    /// channels.
+    pub fn len(&self) -> u32 {
+        self.data_bytes_written / self.bytes_per_sample as u32
+    }
 }
 
 impl<W> Drop for WavWriter<W>
