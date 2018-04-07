@@ -491,7 +491,13 @@ impl<W> WavWriter<W>
     /// that occur in the process cannot be observed in that manner.
     pub fn finalize(mut self) -> Result<()> {
         self.finalized = true;
-        self.update_header()
+        try!(self.update_header());
+        // We need to perform a flush here to truly capture all errors before
+        // the writer is dropped: for a buffered writer, the write to the buffer
+        // may succeed, but the write to the underlying writer may fail. So
+        // flush explicitly.
+        try!(self.writer.flush());
+        Ok(())
     }
 
     /// Returns information about the WAVE file being written.
