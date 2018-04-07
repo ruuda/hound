@@ -32,6 +32,7 @@ matrix:
 # The RMS example relies on f64 implementing From<i32> and From<f32>, which is
 # not the case in older versions of Rust. (It was added in Rust 1.6.0.) Because
 # this is only an example, and the library still compiles, I think it is fine to
-# just skip this single example in this case.
+# just skip this single example in this case. The same goes for the append
+# example, which uses Path::is_file, which was added in Rust 1.5.0.
 before_script:
-  - if [[ "$TRAVIS_RUST_VERSION" == "1.4.0" ]]; then rm examples/rms.rs; fi
+  - if [[ "$TRAVIS_RUST_VERSION" == "1.4.0" ]]; then rm examples/rms.rs examples/append.rs; fi
