@@ -749,3 +749,44 @@ fn new_append_does_not_corrupt_files() {
         println!("ok");
     }
 }
+
+#[cfg(test)]
+fn assert_contents(fname: &str, expected: &[i16]) {
+    let mut reader = WavReader::open(fname).unwrap();
+    let samples: Vec<i16> = reader.samples().map(|s| s.unwrap()).collect();
+    assert_eq!(&samples[..], expected);
+}
+
+#[test]
+fn append_works_on_files() {
+    use std::fs;
+
+    let spec = WavSpec {
+        channels: 1,
+        sample_rate: 44100,
+        bits_per_sample: 16,
+        sample_format: SampleFormat::Int,
+    };
+
+    let mut writer = WavWriter::create("append.wav", spec).unwrap();
+    writer.write_sample(11_i16).unwrap();
+    writer.write_sample(13_i16).unwrap();
+    writer.write_sample(17_i16).unwrap();
+    writer.finalize().unwrap();
+
+    assert_contents("append.wav", &[11, 13, 17]);
+
+    let len = fs::metadata("append.wav").unwrap().len();
+
+    let mut appender = WavWriter::append("append.wav").unwrap();
+
+    appender.write_sample(19_i16).unwrap();
+    appender.write_sample(23_i16).unwrap();
+    appender.finalize().unwrap();
+
+    // We appended four bytes of audio data (2 16-bit samples), so the file
+    // should have grown by 4 bytes.
+    assert_eq!(fs::metadata("append.wav").unwrap().len(), len + 4);
+
+    assert_contents("append.wav", &[11, 13, 17, 19, 23]);
+}
