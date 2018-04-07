@@ -611,7 +611,7 @@ impl WavWriter<io::BufWriter<fs::File>> {
     /// See `WavWriter::new_append()` for more details about append behavior.
     pub fn append<P: AsRef<path::Path>>(filename: P) -> Result<WavWriter<io::BufWriter<fs::File>>> {
         // Open the file in append mode, start reading from the start.
-        let mut file = try!(fs::OpenOptions::new().read(true).append(true).open(filename));
+        let mut file = try!(fs::OpenOptions::new().read(true).write(true).open(filename));
         try!(file.seek(io::SeekFrom::Start(0)));
 
         // Read the header using a buffered reader.
