@@ -13,5 +13,7 @@ Code of conduct
 ---------------
 
  * Be nice.
+ * Please do not discuss politics in the issue tracker,
+   the issue tracker is for technical issues.
 
 [proper-commit]: http://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html
