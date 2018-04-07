@@ -1,13 +1,34 @@
 Changelog
 =========
 
-Unreleased
-----------
+3.4.0
+-----
 
-- Expose `read::read_wave_header()`.
-- Hound fails earlier when requesting to write an unsupported spec:
+Released 2018-04-07.
+
+**Breaking changes**:
+
+- None.
+
+Release highlights:
+
+- Exposes `read_wave_header()`, to quickly determine whether a file could be
+  a wav file.
+- Adds support for appending to an existing file. See `WavWriter::append()` for
+  constructing a writer that appends to a file, and `WavWriter::new_append()`
+  for the generic case.
+- Adds `WavWriter::flush()` to flush the underlying writer and update the
+  header. This can be used to minimize data loss when writing a large file.
+- Adds `WavWriter::duration()`, `WavWriter::len()`, and `WavWriter::spec()` to
+  obtain the duration and number of samples written so far, and the spec of the
+  file being written. The latter is useful when appending.
+- Hound now fails earlier when requesting to write an unsupported spec:
   `WavWriter::new()` will already return `Error::Unsupported`. Previously this
   error was returned when writing a sample.
+- Hound now verifies that the data chunk has no trailing bytes.
+- `WavWriter::finalize()` now performs a flush as its last operation, to be able
+  to observe errors when using a buffered writer.
+- Ensures compatibility with Rust 1.4 through 1.25 stable.
 
 3.3.1
 -----
