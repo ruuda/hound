@@ -36,7 +36,7 @@ where S: hound::Sample + Copy + Debug + PartialEq,
     // Open in append mode and append one sample for each channel.
     {
         let cursor = io::Cursor::new(&mut buffer);
-        let mut writer = match hound::WavWriter::append(cursor) {
+        let mut writer = match hound::WavWriter::new_append(cursor) {
             Ok(w) => w,
             Err(hound::Error::Unsupported) => return,
             Err(err) => panic!("{:?}", err),

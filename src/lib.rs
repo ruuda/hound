@@ -651,7 +651,7 @@ fn flush_should_produce_valid_file() {
 }
 
 #[test]
-fn append_should_append() {
+fn new_append_should_append() {
     use std::io::Seek;
 
     let mut buffer = io::Cursor::new(Vec::new());
@@ -673,7 +673,7 @@ fn append_should_append() {
 
     // Append samples (the same ones a second time).
     {
-        let mut writer = WavWriter::append(&mut buffer).unwrap();
+        let mut writer = WavWriter::new_append(&mut buffer).unwrap();
         assert_eq!(writer.spec(), spec);
         for s in samples { writer.write_sample(*s).unwrap(); }
     }
@@ -690,7 +690,7 @@ fn append_should_append() {
 }
 
 #[test]
-fn append_does_not_corrupt_files() {
+fn new_append_does_not_corrupt_files() {
     use std::io::Read;
     use std::fs;
 
@@ -729,7 +729,7 @@ fn append_does_not_corrupt_files() {
         // Open in append mode and append one sample.
         let mut cursor = io::Cursor::new(buffer);
         {
-            let mut writer = WavWriter::append(&mut cursor).unwrap();
+            let mut writer = WavWriter::new_append(&mut cursor).unwrap();
             writer.write_sample(41_i8).unwrap();
             writer.write_sample(43_i8).unwrap();
         }

@@ -13,10 +13,11 @@
 use std::fs;
 use std::io;
 use std::mem;
-use std::io::Write;
+use std::io::{Seek, Write};
 use std::path;
 use super::{Error, Result, Sample, SampleFormat, WavSpec};
 use ::read;
+use ::read::WavSpecEx;
 
 /// Extends the functionality of `io::Write` with additional methods.
 ///
@@ -496,8 +497,9 @@ impl<W> WavWriter<W>
     /// Returns information about the WAVE file being written.
     ///
     /// This is the same spec that was passed to `WavWriter::new()`. For a
-    /// writer constructed with `WavWriter::append()`, this method returns
-    /// the spec of the file being appended to.
+    /// writer constructed with `WavWriter::new_append()` or
+    /// `WavWriter::append()`, this method returns the spec of the file being
+    /// appended to.
     pub fn spec(&self) -> WavSpec {
         self.spec
     }
@@ -516,6 +518,53 @@ impl<W> Drop for WavWriter<W>
     }
 }
 
+/// Reads the relevant parts of the header required to support append.
+///
+/// Returns (spec_ex, data_len, data_len_offset).
+fn read_append<W: io::Read + io::Seek>(mut reader: &mut W) -> Result<(WavSpecEx, u32, u32)> {
+    let (spec_ex, data_len) = {
+        try!(read::read_wave_header(&mut reader));
+        try!(read::read_until_data(&mut reader))
+    };
+
+    // Record the position of the data chunk length, so we can overwrite it
+    // later.
+    let data_len_offset = try!(reader.seek(io::SeekFrom::Current(0))) as u32 - 4;
+
+    let spec = spec_ex.spec;
+    let num_samples = data_len / spec_ex.bytes_per_sample as u32;
+
+    // There must not be trailing bytes in the data chunk, otherwise the
+    // bytes we write will be off.
+    if num_samples * spec_ex.bytes_per_sample as u32 != data_len {
+        let msg = "data chunk length is not a multiple of sample size";
+        return Err(Error::FormatError(msg));
+    }
+
+    // Hound cannot read or write other bit depths than those, so rather
+    // than refusing to write later, fail early.
+    let supported = match (spec_ex.bytes_per_sample, spec.bits_per_sample) {
+        (1, 8) => true,
+        (2, 16) => true,
+        (3, 24) => true,
+        (4, 32) => true,
+        _ => false,
+    };
+
+    if !supported {
+        return Err(Error::Unsupported);
+    }
+
+    // The number of samples must be a multiple of the number of channels,
+    // otherwise the last inter-channel sample would not have data for all
+    // channels.
+    if num_samples % spec_ex.spec.channels as u32 != 0 {
+        return Err(Error::FormatError("invalid data chunk length"));
+    }
+
+    Ok((spec_ex, data_len, data_len_offset))
+}
+
 impl WavWriter<io::BufWriter<fs::File>> {
     /// Creates a writer that writes the WAVE format to a file.
     ///
@@ -529,16 +578,49 @@ impl WavWriter<io::BufWriter<fs::File>> {
         let buf_writer = io::BufWriter::new(file);
         WavWriter::new(buf_writer, spec)
     }
+
+    /// Creates a writer that appends samples to an existing file.
+    ///
+    /// This is a convenience constructor that opens the file in append mode,
+    /// reads its header using a buffered reader, and then constructs an
+    /// appending `WavWriter` that writes to the file using a `BufWriter`.
+    ///
+    /// See `WavWriter::new_append()` for more details about append behavior.
+    pub fn append<P: AsRef<path::Path>>(filename: P) -> Result<WavWriter<io::BufWriter<fs::File>>> {
+        // Open the file in append mode, start reading from the start.
+        let mut file = try!(fs::OpenOptions::new().read(true).append(true).open(filename));
+        try!(file.seek(io::SeekFrom::Start(0)));
+
+        // Read the header using a buffered reader.
+        let mut buf_reader = io::BufReader::new(file);
+        let (spec_ex, data_len, data_len_offset) = try!(read_append(&mut buf_reader));
+        let mut file = buf_reader.into_inner();
+
+        // Seek to the data position, and from now on, write using a buffered
+        // writer.
+        try!(file.seek(io::SeekFrom::Current(data_len as i64)));
+        let buf_writer = io::BufWriter::new(file);
+
+        let writer = WavWriter {
+            spec: spec_ex.spec,
+            bytes_per_sample: spec_ex.bytes_per_sample,
+            writer: buf_writer,
+            data_bytes_written: data_len,
+            sample_writer_buffer: Vec::new(),
+            finalized: false,
+            data_len_offset: data_len_offset,
+        };
+
+        Ok(writer)
+    }
 }
 
-impl<W> WavWriter<W>
-    where W: io::Read + io::Write + io::Seek
-{
-    /// Creates a writer that appends samples to an existing file.
+impl<W> WavWriter<W> where W: io::Read + io::Write + io::Seek {
+    /// Creates a writer that appends samples to an existing file stream.
     ///
     /// This first reads the existing header to obtain the spec, then seeks to
     /// the end of the writer. The writer then appends new samples to the end of
-    /// the file.
+    /// the stream.
     ///
     /// The underlying writer is assumed to be at offset 0.
     ///
@@ -546,51 +628,11 @@ impl<W> WavWriter<W>
     /// appending, and hence become outdated. For files produced by Hound this
     /// is not an issue, because Hound never writes a fact chunk. For all the
     /// formats that Hound can write, the fact chunk is redundant.
-    pub fn append(mut writer: W) -> Result<WavWriter<W>> {
-        let (spec_ex, data_len) = {
-            try!(read::read_wave_header(&mut writer));
-            try!(read::read_until_data(&mut writer))
-        };
-
-        // Record the position of the data chunk length, so we can overwrite it
-        // later.
-        let data_len_offset = try!(writer.seek(io::SeekFrom::Current(0))) as u32 - 4;
-
-        let spec = spec_ex.spec;
-        let num_samples = data_len / spec_ex.bytes_per_sample as u32;
-
-        // There must not be trailing bytes in the data chunk, otherwise the
-        // bytes we write will be off.
-        if num_samples * spec_ex.bytes_per_sample as u32 != data_len {
-            let msg = "data chunk length is not a multiple of sample size";
-            return Err(Error::FormatError(msg));
-        }
-
-        // Hound cannot read or write other bit depths than those, so rather
-        // than refusing to write later, fail early.
-        let supported = match (spec_ex.bytes_per_sample, spec.bits_per_sample) {
-            (1, 8) => true,
-            (2, 16) => true,
-            (3, 24) => true,
-            (4, 32) => true,
-            _ => false,
-        };
-
-        if !supported {
-            return Err(Error::Unsupported);
-        }
-
-        // The number of samples must be a multiple of the number of channels,
-        // otherwise the last inter-channel sample would not have data for all
-        // channels.
-        if num_samples % spec_ex.spec.channels as u32 != 0 {
-            return Err(Error::FormatError("invalid data chunk length"));
-        }
-
+    pub fn new_append(mut writer: W) -> Result<WavWriter<W>> {
+        let (spec_ex, data_len, data_len_offset) = try!(read_append(&mut writer));
         try!(writer.seek(io::SeekFrom::Current(data_len as i64)));
-
         let writer = WavWriter {
-            spec: spec,
+            spec: spec_ex.spec,
             bytes_per_sample: spec_ex.bytes_per_sample,
             writer: writer,
             data_bytes_written: data_len,
