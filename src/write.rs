@@ -545,10 +545,10 @@ impl<W> Drop for WavWriter<W>
 ///
 /// Returns (spec_ex, data_len, data_len_offset).
 fn read_append<W: io::Read + io::Seek>(mut reader: &mut W) -> Result<(WavSpecEx, u32, u32)> {
-    let (spec_ex, data_len) = {
-        try!(read::read_wave_header(&mut reader));
-        try!(read::read_until_data(&mut reader))
-    };
+    try!(read::read_wave_header(&mut reader));
+    let mut chunk_reader = read::ChunksReader::new(reader);
+    let (spec_ex, data_len) = try!(read::read_until_data(&mut chunk_reader));
+    let reader = chunk_reader.into_inner();
 
     // Record the position of the data chunk length, so we can overwrite it
     // later.
