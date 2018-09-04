@@ -179,129 +179,257 @@ impl<R> ReadExt for R
     }
 }
 
-/// The different chunks that a WAVE file can contain.
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum ChunkKind {
-    Fmt,
-    Fact,
-    Data,
-    Unknown,
+/// A reader for safe Unknown chunks access.
+///
+/// This reader borrow the underlying low-level reader from 
+/// the ChunkReader, and enforce chunk boundaries.
+pub struct EmbeddedReader<'r, R: 'r + io::Read> {
+    /// low-level reader
+    reader: &'r mut R,
+    /// how long the chunk is, in bytes
+    pub len: i64,
+    /// how much bytes remains to be read
+    pub remaining: i64,
 }
 
-/// Describes the structure of a chunk in the WAVE file.
-#[derive(Copy, Clone, Debug)]
-pub struct ChunkHeader {
-    pub kind: ChunkKind,
-    pub len: u32,
-}
-
-enum ChunksReaderState {
-    BetweenChunks,
-    MidChunk {
-        header: ChunkHeader,
-        remaining: usize,
+/// On drop, the EmbeddedReader will skip the remaining chunk bytes
+/// to reposition the underlying reader to the next chunk.
+impl<'r, R: 'r + io::Read> Drop for EmbeddedReader<'r, R> {
+    fn drop(&mut self) {
+        let _ = self.reader.skip_bytes((self.remaining + self.len % 2) as usize);
     }
 }
 
+impl<'r, R: io::Read> io::Read for EmbeddedReader<'r, R> {
+    fn read(&mut self, buffer: &mut[u8]) -> io::Result<usize> {
+        let max = buffer.len().min(self.remaining as usize);
+        let read = try!(self.reader.read(&mut buffer[0..max]));
+        self.remaining -= read as i64;
+        Ok(read)
+    }
+}
+
+impl<'r, R: io::Read + io::Seek> io::Seek for EmbeddedReader<'r, R> {
+    fn seek(&mut self, seek: io::SeekFrom) -> io::Result<u64> {
+        if let io::SeekFrom::Current(offset) = seek {
+            let current_in_chunk = self.len as i64 - self.remaining as i64;
+            let wanted_in_chunk = current_in_chunk as i64 + offset;
+            if wanted_in_chunk < 0 {
+                Err(io::Error::new(io::ErrorKind::Other, "Seeking befoer begin of chunk"))
+            } else {
+                self.reader.seek(io::SeekFrom::Current(offset))
+            }
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "Only relative seek is supported."))
+        }
+    }
+}
+
+/// A chunk in a Riff Wave file.
+pub enum Chunk<'r, R: 'r + io::Read> {
+    /// format chunk, fully parsed into a WavSpecEx
+    Fmt(WavSpecEx),
+    /// fact chunk, used by non-pcm encoding but redundant
+    Fact,
+    /// data chunk, where the samples are actually stored
+    Data,
+    /// any other riff chunk
+    Unknown([u8; 4], EmbeddedReader<'r, R>),
+}
+
+/// A Riff chunk Wave reader, giving access to all chunks in the file.
+///
+/// For simple wave file decoding, prefer the `WavReader` facade.
+/// ChunksReader should only be use when one need to access chunks
+/// not specified by the Wave format.
 pub struct ChunksReader<R: io::Read> {
+    /// the underlying reader
     reader: R,
-    pub spec: Option<WavSpecEx>,
-    state: ChunksReaderState,
+    /// the Wave format specification, if it has been read already
+    pub spec_ex: Option<WavSpecEx>,
+    /// when inside the main data state, keeps track of decoding and chunk
+    /// boundaries
+    pub data_state: Option<DataReadingState>,
+}
+
+/// This struct helps represent the inner state of the ChunksReader
+/// during data chunk parsing.
+#[derive(Copy, Clone)]
+pub struct DataReadingState {
+    /// the format specification for the file
+    pub spec_ex: WavSpecEx,
+    /// total length of the data chunk, in bytes
+    pub len: i64,
+    /// number of remaining bytes to be read in the data chunk
+    pub remaining: i64,
 }
 
 impl<R: io::Read> ChunksReader<R> {
+    /// Builds a ChunksReader from a std Reader.
+    ///
+    /// This function will only read the Riff header from the file
+    /// in order to position the stream to the first chunk.
     pub fn new(mut reader: R) -> Result<ChunksReader<R>> {
         try!(read_wave_header(&mut reader));
         Ok(ChunksReader {
-            spec: None,
             reader: reader,
-            state: ChunksReaderState::BetweenChunks,
+            spec_ex: None,
+            data_state: None,
         })
     }
 
-    fn skip_remaining(&mut self) -> Result<()> {
-        if let ChunksReaderState::MidChunk { ref remaining, ref header, .. } = self.state {
-            try!(self.reader.skip_bytes(remaining + header.len as usize % 2));
+    /// Returns an iterator over all samples.
+    ///
+    /// The channel data is is interleaved. The iterator is streaming. That is,
+    /// if you call this method once, read a few samples, and call this method
+    /// again, the second iterator will not start again from the beginning of
+    /// the file, it will continue where the first iterator stopped.
+    ///
+    /// The type `S` must have at least `spec().bits_per_sample` bits,
+    /// otherwise every iteration will return an error. All bit depths up to
+    /// 32 bits per sample can be decoded into an `i32`, but if you know
+    /// beforehand that you will be reading a file with 16 bits per sample, you
+    /// can save memory by decoding into an `i16`.
+    ///
+    /// The type of `S` (int or float) must match `spec().sample_format`,
+    /// otherwise every iteration will return an error.
+    ///
+    /// This function will panic if it is called while the reader is not in
+    /// the data chunk, or if the format has not been parsed.
+    pub fn samples<'wr, S: Sample>(&'wr mut self) -> WavSamples<'wr, R, S> {
+        let _data_state = self.data_state.expect("Not in the data chunk.");
+        WavSamples {
+            reader: self,
+            phantom_sample: marker::PhantomData,
         }
-        self.state = ChunksReaderState::BetweenChunks;
-        Ok(())
+
     }
 
-    pub fn next_chunk(&mut self) -> Result<Option<ChunkHeader>> {
-        try!(self.skip_remaining());
-        let header = try!(Self::read_chunk_header(&mut self.reader));
-        self.state = ChunksReaderState::MidChunk { remaining: header.len as usize, header };
-        Ok(Some(header))
+    /// Same as `samples`, but takes ownership of the `WavReader`.
+    ///
+    /// See `samples()` for more info.
+    pub fn into_samples<S: Sample>(self) -> WavIntoSamples<R, S> {
+        let _data_state = self.data_state.expect("Not in the data chunk.");
+        WavIntoSamples {
+            reader: self,
+            phantom_sample: marker::PhantomData,
+        }
     }
 
-    /// Attempts to read an 8-byte chunk header.
-    fn read_chunk_header(reader: &mut R) -> Result<ChunkHeader> {
+    /// Returns the duration of the file in samples.
+    ///
+    /// The duration is independent of the number of channels. It is expressed
+    /// in units of samples. The duration in seconds can be obtained by
+    /// dividing this number by the sample rate. The duration is independent of
+    /// how many samples have been read already.
+    ///
+    /// This function will panic if it is called while the reader is not in
+    /// the data chunk, or if the format has not been parsed.
+    pub fn duration(&self) -> u32 {
+        let data = self.data_state.expect("Not in the data chunk.");
+        self.len() / data.spec_ex.spec.channels as u32
+    }
+
+    /// Returns the number of values that the sample iterator will yield.
+    ///
+    /// The length of the file is its duration (in samples) times the number of
+    /// channels. The length is independent of how many samples have been read
+    /// already. To get the number of samples left, use `len()` on the
+    /// `samples()` iterator.
+    ///
+    /// This function will panic if it is called while the reader is not in
+    /// the data chunk, or if the format has not been parsed.
+    pub fn len(&self) -> u32 {
+        let data = self.data_state.expect("Not in the data chunk.");
+        data.len as u32 / data.spec_ex.bytes_per_sample as u32
+    }
+
+    /// Parse the next chunk from the reader.
+    ///
+    /// Returns None at end of file, or a `Chunk` instance depending
+    /// on the chunk kind.
+    ///
+    /// For fmt and fact kinds, the function will actually parse the
+    /// chunk, returns it, and update `spec_ex`.
+    ///
+    /// For Data, the underlying reader will be left at the beginning
+    /// of the first sample, and `data_state` will be created to allow
+    /// keep track of the audio samples parsing.
+    pub fn next(&mut self) -> Result<Option<Chunk<R>>> {
+        if let Some(data) = self.data_state {
+            try!(self.reader.skip_bytes(data.remaining as usize));
+            self.data_state = None
+        }
         let mut kind_str = [0; 4];
-        try!(reader.read_into(&mut kind_str));
-        let len = try!(reader.read_le_u32());
-
-        let kind = match &kind_str[..] {
-            b"fmt " => ChunkKind::Fmt,
-            b"fact" => ChunkKind::Fact,
-            b"data" => ChunkKind::Data,
-            _ => ChunkKind::Unknown,
-        };
-
-        Ok(ChunkHeader { kind: kind, len: len })
+        if let Err(_) = self.reader.read_into(&mut kind_str) {
+            // assumes EOF
+            return Ok(None);
+        }
+        let len = try!(self.reader.read_le_u32());
+        match &kind_str {
+            b"fmt " => {
+                let spec_ex = try!(self.read_fmt_chunk(len));
+                self.spec_ex = Some(spec_ex);
+                return Ok(Some(Chunk::Fmt(spec_ex)))
+            }
+            b"fact" => {
+                // All (compressed) non-PCM formats must have a fact chunk
+                // (Rev. 3 documentation). The chunk contains at least one
+                // value, the number of samples in the file.
+                //
+                // The number of samples field is redundant for sampled
+                // data, since the Data chunk indicates the length of the
+                // data. The number of samples can be determined from the
+                // length of the data and the container size as determined
+                // from the Format chunk.
+                // http://www-mmsp.ece.mcgill.ca/documents/audioformats/wave/wave.html
+                let _samples_per_channel = self.reader.read_le_u32();
+                return Ok(Some(Chunk::Fact))
+            }
+            b"data" => {
+                if let Some(spec_ex) = self.spec_ex {
+                    self.data_state = Some(DataReadingState {
+                        spec_ex: spec_ex,
+                        len: len as i64,
+                        remaining: len as i64,
+                    });
+                    return Ok(Some(Chunk::Data));
+                } else {
+                    return Err(Error::FormatError("missing fmt chunk"))
+                }
+            }
+            _ => {
+                let reader = EmbeddedReader {
+                    reader: &mut self.reader,
+                    len: len as i64,
+                    remaining: len as i64,
+                };
+                return Ok(Some(Chunk::Unknown(kind_str, reader)));
+            }
+        }
+        // If no data chunk is ever encountered, the function will return
+        // via one of the try! macros that return an Err on end of file.
     }
 
     /// Reads chunks until a data chunk is encountered.
     ///
-    /// Returns the information from the fmt chunk and the length of the data
-    /// chunk in bytes. Afterwards, the reader will be positioned at the first
-    /// content byte of the data chunk.
-    pub fn read_until_data(&mut self) -> Result<ChunkHeader> {
-        loop {
-            let header = try!(self.next_chunk());
-            let header = try!(header.ok_or(Error::FormatError("Wave file without DATA chunk")));
-            println!("see header: {:?}", header);
-            match header.kind {
-                ChunkKind::Fmt => {
-                    try!(self.read_fmt_chunk());
-                }
-                ChunkKind::Fact => {
-                    // All (compressed) non-PCM formats must have a fact chunk
-                    // (Rev. 3 documentation). The chunk contains at least one
-                    // value, the number of samples in the file.
-                    //
-                    // The number of samples field is redundant for sampled
-                    // data, since the Data chunk indicates the length of the
-                    // data. The number of samples can be determined from the
-                    // length of the data and the container size as determined
-                    // from the Format chunk.
-                    // http://www-mmsp.ece.mcgill.ca/documents/audioformats/wave/wave.html
-                }
-                ChunkKind::Data => {
-                    if self.spec.is_some() {
-                        return Ok(header);
-                    } else {
-                        return Err(Error::FormatError("missing fmt chunk"));
-                    }
-                }
-                ChunkKind::Unknown => { }
+    /// Returns true if a data chunk has been found.  Afterwards, the reader
+    /// will be positioned at the first content byte of the data chunk.
+    pub fn read_until_data(&mut self) -> Result<bool> {
+        while let Some(chunk) = try!(self.next()) {
+            if let Chunk::Data = chunk {
+                return Ok(true)
             }
-            // If no data chunk is ever encountered, the function will return
-            // via one of the try! macros that return an Err on end of file.
         }
+        Ok(false)
     }
 
     /// Reads the fmt chunk of the file, returns the information it provides.
-    pub fn read_fmt_chunk(&mut self) -> Result<WavSpecEx> {
+    fn read_fmt_chunk(&mut self, chunk_len: u32) -> Result<WavSpecEx> {
         // A minimum chunk length of at least 16 is assumed. Note: actually,
         // the first 14 bytes contain enough information to fully specify the
         // file. I have not encountered a file with a 14-byte fmt section
         // though. If you ever encounter such file, please contact me.
-        let fmt_chunk = try!(self.current_chunk()
-                             .ok_or(Error::InvalidState("Not positioned on a chunk")));
-        if fmt_chunk.kind != ChunkKind::Fmt {
-            return Err(Error::InvalidState("Not positioned on a fmt chunk"))
-        }
-        let chunk_len = fmt_chunk.len;
         if chunk_len < 16 {
             return Err(Error::FormatError("invalid fmt chunk size"));
         }
@@ -343,12 +471,12 @@ impl<R: io::Read> ChunksReader<R> {
         // is misleading though, because it is the number of bits used to store
         // a sample, not all of the bits need to be valid for all versions of
         // the WAVE format.)
-        let format_tag = try!(self.read_le_u16());
-        let n_channels = try!(self.read_le_u16());
-        let n_samples_per_sec = try!(self.read_le_u32());
-        let n_bytes_per_sec = try!(self.read_le_u32());
-        let block_align = try!(self.read_le_u16());
-        let bits_per_sample = try!(self.read_le_u16());
+        let format_tag = try!(self.reader.read_le_u16());
+        let n_channels = try!(self.reader.read_le_u16());
+        let n_samples_per_sec = try!(self.reader.read_le_u32());
+        let n_bytes_per_sec = try!(self.reader.read_le_u32());
+        let block_align = try!(self.reader.read_le_u16());
+        let bits_per_sample = try!(self.reader.read_le_u16());
 
         if n_channels == 0 {
             return Err(Error::FormatError("file contains zero channels"));
@@ -386,16 +514,13 @@ impl<R: io::Read> ChunksReader<R> {
         const ADPCM: u16 = 0x0002;
         const IEEE_FLOAT: u16 = 0x0003;
         const EXTENSIBLE: u16 = 0xfffe;
-        let spec = match format_tag {
+        match format_tag {
             PCM => self.read_wave_format_pcm(chunk_len, spec),
             ADPCM => Err(Error::Unsupported),
             IEEE_FLOAT => self.read_wave_format_ieee_float(chunk_len, spec),
             EXTENSIBLE => self.read_wave_format_extensible(chunk_len, spec),
             _ => Err(Error::Unsupported),
-        };
-        let spec = try!(spec);
-        self.spec = Some(spec);
-        Ok(spec)
+        }
     }
 
     fn read_wave_format_pcm(&mut self, chunk_len: u32, spec: WavSpec) -> Result<WavSpecEx> {
@@ -415,7 +540,7 @@ impl<R: io::Read> ChunksReader<R> {
             // additional data. However, for WAVE_FORMAT_PCM, the member should
             // be ignored, see https://msdn.microsoft.com/en-us/library/ms713497.aspx.
             // Nonzero values do in fact occur in practice.
-            let _cb_size = try!(self.read_le_u16());
+            let _cb_size = try!(self.reader.read_le_u16());
 
             // For WAVE_FORMAT_PCM in WAVEFORMATEX, only 8 or 16 bits per
             // sample are valid according to
@@ -433,7 +558,7 @@ impl<R: io::Read> ChunksReader<R> {
 
         // If the chunk len was longer than expected, ignore the additional bytes.
         if chunk_len == 40 {
-            try!(self.skip_bytes(22));
+            try!(self.reader.skip_bytes(22));
         }
 
         let spec_ex = WavSpecEx {
@@ -456,7 +581,7 @@ impl<R: io::Read> ChunksReader<R> {
         if is_wave_format_ex {
             // For WAVE_FORMAT_IEEE_FLOAT which we are reading, there should
             // be no extra data, so `cbSize` should be 0.
-            let cb_size = try!(self.read_le_u16());
+            let cb_size = try!(self.reader.read_le_u16());
             if cb_size != 0 {
                 return Err(Error::FormatError("unexpected WAVEFORMATEX size"));
             }
@@ -492,7 +617,7 @@ impl<R: io::Read> ChunksReader<R> {
         }
 
         // `cbSize` is the last field of the WAVEFORMATEX struct.
-        let cb_size = try!(self.read_le_u16());
+        let cb_size = try!(self.reader.read_le_u16());
 
         // `cbSize` must be at least 22, but in this case we assume that it is
         // 22, because we would not know how to handle extra data anyway.
@@ -514,10 +639,10 @@ impl<R: io::Read> ChunksReader<R> {
         //   GUID    SubFormat;
         // } WAVEFORMATEXTENSIBLE, *PWAVEFORMATEXTENSIBLE;
         // ```
-        let valid_bits_per_sample = try!(self.read_le_u16());
-        let _channel_mask = try!(self.read_le_u32()); // Not used for now.
+        let valid_bits_per_sample = try!(self.reader.read_le_u16());
+        let _channel_mask = try!(self.reader.read_le_u32()); // Not used for now.
         let mut subformat = [0u8; 16];
-        try!(self.read_into(&mut subformat));
+        try!(self.reader.read_into(&mut subformat));
 
         // Several GUIDS are defined. At the moment, only the following are supported:
         //
@@ -545,91 +670,45 @@ impl<R: io::Read> ChunksReader<R> {
         self.reader
     }
 
-    pub fn into_wav_reader(mut self) -> Result<WavReader<R>> {
-        if self.current_chunk().map(|c| c.kind) != Some(ChunkKind::Data) {
-            try!(self.read_until_data());
-        }
-        let spec_ex = try!(self.spec.ok_or(Error::FormatError("DATA chunk with fmt")));
-        let data_chunk = try!(self.current_chunk().ok_or(Error::FormatError("No DATA chunk")));
-        let data_len = data_chunk.len;
-
-        let num_samples = data_len / spec_ex.bytes_per_sample as u32;
-
-        // It could be that num_samples * bytes_per_sample < data_len.
-        // If data_len is not a multiple of bytes_per_sample, there is some
-        // trailing data. Either somebody is playing some steganography game,
-        // but more likely something is very wrong, and we should refuse to
-        // decode the file, as it is invalid.
-        if num_samples * spec_ex.bytes_per_sample as u32 != data_len {
-            let msg = "data chunk length is not a multiple of sample size";
-            return Err(Error::FormatError(msg));
-        }
-
-        // The number of samples must be a multiple of the number of channels,
-        // otherwise the last inter-channel sample would not have data for all
-        // channels.
-        if num_samples % spec_ex.spec.channels as u32 != 0 {
-            return Err(Error::FormatError("invalid data chunk length"));
-        }
-
-        let wav_reader = WavReader {
-            spec: spec_ex.spec,
-            bytes_per_sample: spec_ex.bytes_per_sample,
-            num_samples: num_samples,
-            samples_read: 0,
-            reader: self,
-        };
-
-        Ok(wav_reader)
+    /// Seek to the given time within the file.
+    ///
+    /// The given time is measured in number of samples (independent of the
+    /// number of channels) since the beginning of the audio data. To seek to
+    /// a particular time in seconds, multiply the number of seconds with
+    /// `WavSpec::sample_rate`. The given time should not exceed the duration of
+    /// the file (returned by `duration()`). The behavior when seeking beyond
+    /// `duration()` depends on the reader's `Seek` implementation.
+    ///
+    /// This method requires that the inner reader `R` implements `Seek`.
+    pub fn seek(&mut self, time: u32) -> io::Result<()>
+        where R: io::Seek,
+    {
+        let data = self.data_state.expect("Not in the data chunk.");
+        let wanted_sample = time as i64 * data.spec_ex.spec.channels as i64;
+        let wanted_byte = wanted_sample * data.spec_ex.bytes_per_sample as i64;
+        let current_byte = data.len - data.remaining;
+        let offset = wanted_byte - current_byte;
+        try!(self.reader.seek(io::SeekFrom::Current(offset)));
+        self.data_state.as_mut().unwrap().remaining = data.remaining - offset;
+        Ok(())
     }
-
-    pub fn current_chunk(&self) -> Option<ChunkHeader> {
-        if let ChunksReaderState::MidChunk { ref header, .. } = self.state {
-            Some(*header)
-        } else {
-            None
-        }
-    }
-
 }
 
 impl<R: io::Read> io::Read for ChunksReader<R> {
     fn read(&mut self, buffer: &mut[u8]) -> io::Result<usize> {
-        let ChunksReader { reader, state, .. } = self;
-        if let ChunksReaderState::MidChunk { ref mut remaining, .. } = state {
-            let max = buffer.len().min(*remaining as usize);
-            let read = try!(reader.read(&mut buffer[0..max]));
-            *remaining -= read;
-            Ok(read)
-        } else {
-            Err(io::Error::new(io::ErrorKind::Other, "read called in between chunks"))
+        let data = self.data_state.expect("Not in the data chunk.");
+        if data.remaining <= 0 {
+            return Ok(0)
         }
-    }
-}
-
-impl<R: io::Read + io::Seek> io::Seek for ChunksReader<R> {
-    fn seek(&mut self, seek: io::SeekFrom) -> io::Result<u64> {
-        let ChunksReader { reader, state, .. } = self;
-        if let ChunksReaderState::MidChunk { header, ref mut remaining } = state {
-            if let io::SeekFrom::Current(offset) = seek {
-                let current_in_chunk = header.len as i64 - *remaining as i64;
-                let wanted_in_chunk = current_in_chunk as i64 + offset;
-                if wanted_in_chunk < 0 {
-                    Err(io::Error::new(io::ErrorKind::Other, "Seeking befoer begin of chunk"))
-                } else {
-                    reader.seek(io::SeekFrom::Current(offset))
-                }
-            } else {
-                Err(io::Error::new(io::ErrorKind::Other, "Only relative seek is supported."))
-            }
-        } else {
-            Err(io::Error::new(io::ErrorKind::Other, "Seek is only supported in a chunk."))
-        }
+        let max = buffer.len().min(data.remaining as usize);
+        let read = try!(self.reader.read(&mut buffer[0..max]));
+        self.data_state.as_mut().unwrap().remaining -= read as i64;
+        Ok(read)
     }
 }
 
 /// Specifies properties of the audio data, as well as the layout of the stream.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct WavSpecEx {
     /// The normal information about the audio data.
     ///
@@ -648,24 +727,10 @@ pub struct WavSpecEx {
 /// buffering is performed on the underlying reader, but this can easily be
 /// added by wrapping the reader in an `io::BufReader`. The `open` constructor
 /// takes care of this for you.
+///
+/// `WavReader` is a wrapper around `ChunksReader`.
 pub struct WavReader<R: io::Read> {
-    /// Specification of the file as found in the fmt chunk.
-    spec: WavSpec,
-
-    /// The number of bytes used to store a sample in the stream.
-    bytes_per_sample: u16,
-
-    /// The number of samples in the data chunk.
-    ///
-    /// The data chunk is limited to a 4 GiB length because its header has a
-    /// 32-bit length field. A sample takes at least one byte to store, so the
-    /// number of samples is always less than 2^32.
-    num_samples: u32,
-
-    /// The number of samples read so far.
-    samples_read: u32,
-
-    /// The reader from which the WAVE format is read.
+    /// The chunk reader from which the WAVE file is read.
     reader: ChunksReader<R>,
 }
 
@@ -676,7 +741,7 @@ pub struct WavReader<R: io::Read> {
 pub struct WavSamples<'wr, R, S>
     where R: io::Read + 'wr
 {
-    reader: &'wr mut WavReader<R>,
+    reader: &'wr mut ChunksReader<R>,
     phantom_sample: marker::PhantomData<S>,
 }
 
@@ -685,7 +750,7 @@ pub struct WavSamples<'wr, R, S>
 /// The type `S` must have at least as many bits as the bits per sample of the
 /// file, otherwise every iteration will return an error.
 pub struct WavIntoSamples<R: io::Read, S> {
-    reader: WavReader<R>,
+    reader: ChunksReader<R>,
     phantom_sample: marker::PhantomData<S>,
 }
 
@@ -727,13 +792,18 @@ impl<R> WavReader<R>
     /// The header is read immediately. Reading the data will be done on
     /// demand.
     pub fn new(reader: R) -> Result<WavReader<R>> {
-        let reader = try!(ChunksReader::new(reader));
-        reader.into_wav_reader()
+        let mut reader = try!(ChunksReader::new(reader));
+        try!(reader.read_until_data());
+        Ok(WavReader {
+            reader: reader,
+        })
     }
 
     /// Returns information about the WAVE file.
     pub fn spec(&self) -> WavSpec {
-        self.spec
+        self.reader.spec_ex
+            .expect("WavReader's chunk reader must have find a format")
+            .spec
     }
 
     /// Returns an iterator over all samples.
@@ -752,20 +822,14 @@ impl<R> WavReader<R>
     /// The type of `S` (int or float) must match `spec().sample_format`,
     /// otherwise every iteration will return an error.
     pub fn samples<'wr, S: Sample>(&'wr mut self) -> WavSamples<'wr, R, S> {
-        WavSamples {
-            reader: self,
-            phantom_sample: marker::PhantomData,
-        }
+        self.reader.samples()
     }
 
     /// Same as `samples`, but takes ownership of the `WavReader`.
     ///
     /// See `samples()` for more info.
     pub fn into_samples<S: Sample>(self) -> WavIntoSamples<R, S> {
-        WavIntoSamples {
-            reader: self,
-            phantom_sample: marker::PhantomData,
-        }
+        self.reader.into_samples()
     }
 
     /// Returns the duration of the file in samples.
@@ -775,7 +839,7 @@ impl<R> WavReader<R>
     /// dividing this number by the sample rate. The duration is independent of
     /// how many samples have been read already.
     pub fn duration(&self) -> u32 {
-        self.num_samples / self.spec.channels as u32
+        self.reader.duration()
     }
 
     /// Returns the number of values that the sample iterator will yield.
@@ -785,7 +849,7 @@ impl<R> WavReader<R>
     /// already. To get the number of samples left, use `len()` on the
     /// `samples()` iterator.
     pub fn len(&self) -> u32 {
-        self.num_samples
+        self.reader.len()
     }
 
     /// Destroys the `WavReader` and returns the underlying reader.
@@ -806,14 +870,7 @@ impl<R> WavReader<R>
     pub fn seek(&mut self, time: u32) -> io::Result<()>
         where R: io::Seek,
     {
-        use std::io::Seek;
-        let bytes_per_sample = self.spec.bits_per_sample / 8;
-        let sample_position = time * self.spec.channels as u32;
-        let offset_samples = sample_position as i64 - self.samples_read as i64;
-        let offset_bytes = offset_samples * bytes_per_sample as i64;
-        try!(self.reader.seek(io::SeekFrom::Current(offset_bytes)));
-        self.samples_read = sample_position;
-        Ok(())
+        self.reader.seek(time)
     }
 }
 
@@ -829,25 +886,26 @@ impl WavReader<io::BufReader<fs::File>> {
     }
 }
 
-fn iter_next<R, S>(reader: &mut WavReader<R>) -> Option<Result<S>>
+fn iter_next<R, S>(reader: &mut ChunksReader<R>) -> Option<Result<S>>
     where R: io::Read,
           S: Sample
 {
-    if reader.samples_read < reader.num_samples {
-        reader.samples_read += 1;
-        let sample = Sample::read(&mut reader.reader,
-                                  reader.spec.sample_format,
-                                  reader.bytes_per_sample,
-                                  reader.spec.bits_per_sample);
+    let data = reader.data_state.expect("reader not in data chunk");
+    if data.remaining > 0 {
+        let sample = Sample::read(reader,
+                                  data.spec_ex.spec.sample_format,
+                                  data.spec_ex.bytes_per_sample,
+                                  data.spec_ex.spec.bits_per_sample);
         Some(sample.map_err(Error::from))
     } else {
         None
     }
 }
 
-fn iter_size_hint<R: io::Read>(reader: &WavReader<R>) -> (usize, Option<usize>) {
-    let samples_left = reader.num_samples - reader.samples_read;
-    (samples_left as usize, Some(samples_left as usize))
+fn iter_size_hint<R: io::Read>(reader: &ChunksReader<R>) -> (usize, Option<usize>) {
+    let data = reader.data_state.expect("reader not in data chunk");
+    let samples_left = (data.remaining / data.spec_ex.bytes_per_sample as i64) as usize;
+    (samples_left, Some(samples_left))
 }
 
 impl<'wr, R, S> Iterator for WavSamples<'wr, R, S>
@@ -1265,12 +1323,11 @@ fn seek_is_consistent() {
         // Seeking back to the start should "reset" the reader.
         let count = reader.samples::<i32>().count();
         reader.seek(0).unwrap();
-        assert_eq!(reader.samples_read, 0);
         assert_eq!(count, reader.samples::<i32>().count());
 
         // Seek to the last sample.
         let last_time = reader.duration() - 1;
-        let channels = reader.spec.channels;
+        let channels = reader.spec().channels;
         reader.seek(last_time).unwrap();
         {
             let mut samples = reader.samples::<i32>();

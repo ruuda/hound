@@ -327,8 +327,6 @@ pub enum Error {
     IoError(io::Error),
     /// Ill-formed WAVE data was encountered.
     FormatError(&'static str),
-    /// An inconsistency in parsing chunks has been detected.
-    InvalidState(&'static str),
     /// The sample has more bits than the destination type.
     ///
     /// When iterating using the `samples` iterator, this means that the
@@ -360,10 +358,6 @@ impl fmt::Display for Error {
                 try!(formatter.write_str("Ill-formed WAVE file: "));
                 formatter.write_str(reason)
             }
-            Error::InvalidState(reason) => {
-                try!(formatter.write_str("Invalid WAVE parser state"));
-                formatter.write_str(reason)
-            }
             Error::TooWide => {
                 formatter.write_str("The sample has more bits than the destination type.")
             }
@@ -386,7 +380,6 @@ impl error::Error for Error {
         match *self {
             Error::IoError(ref err) => err.description(),
             Error::FormatError(reason) => reason,
-            Error::InvalidState(reason) => reason,
             Error::TooWide => "the sample has more bits than the destination type",
             Error::UnfinishedSample => "the number of samples written is not a multiple of the number of channels",
             Error::Unsupported => "the wave format of the file is not supported",
@@ -398,7 +391,6 @@ impl error::Error for Error {
         match *self {
             Error::IoError(ref err) => Some(err),
             Error::FormatError(_) => None,
-            Error::InvalidState(_) => None,
             Error::TooWide => None,
             Error::UnfinishedSample => None,
             Error::Unsupported => None,
@@ -799,97 +791,47 @@ fn append_works_on_files() {
     assert_contents("append.wav", &[11, 13, 17, 19, 23]);
 }
 
-#[test]
-fn write_read_chunks_is_lossless() {
-    let vec = Vec::new();
-    let mut buffer = io::Cursor::new(vec);
-    let write_spec = WavSpec {
-        channels: 2,
-        sample_rate: 44100,
-        bits_per_sample: 16,
-        sample_format: SampleFormat::Int,
-    };
-    {
-        let mut writer = WavWriter::new(&mut buffer, write_spec).unwrap();
-        for s in -1024_i16..1024 {
-            writer.write_sample(s).unwrap();
-        }
-        writer.finalize().unwrap();
-    }
-    /*
-    {
-        let mut writer = WavWriter::new_with_chunks(&mut buffer, write_spec, &[(*b"houn", b"1234")]).unwrap();
-        for s in -1024_i16..1024 {
-            writer.write_sample(s).unwrap();
-        }
-        writer.finalize().unwrap();
-    }
-    */
-    {
-        buffer.set_position(0);
-        //let mut chunk_counter = 0;
-
-        let mut reader = read::ChunksReader::new(&mut buffer).unwrap();
-
-        let fmt = reader.next_chunk().unwrap().unwrap();
-        assert!(fmt.kind == read::ChunkKind::Fmt);
-        let _spec = reader.read_fmt_chunk().unwrap();
-
-        let data = reader.next_chunk().unwrap().unwrap();
-        assert!(data.kind == read::ChunkKind::Data);
-        let mut reader = reader.into_wav_reader().unwrap();
-
-        /*
-        let mut reader = WavReader::new_with_unknown_handler(&mut buffer, Some(&mut |code, data| {
-            assert_eq!(code, *b"houn");
-            assert_eq!(data, b"1234");
-            chunk_counter += 1;
-            Ok(())
-        })).unwrap();
-        */
-        //assert_eq!(chunk_counter, 1);
-
-        assert_eq!(write_spec, reader.spec());
-        assert_eq!(reader.len(), 2048);
-        for (expected, read) in (-1024_i16..1024).zip(reader.samples()) {
-            assert_eq!(expected, read.unwrap());
+#[cfg(test)]
+macro_rules! panic_unless_let {
+    ($pat:pat = $expr:expr) => {
+        if let $pat = $expr {
+            ()
+        } else {
+            panic!("Expected {} to match {}", stringify!($expr), stringify!($pat))
         }
     }
 }
 
-/*
-#[test]
-fn write_read_chunks_odd_size_is_lossless() {
-    let vec = Vec::new();
-    let mut buffer = io::Cursor::new(vec);
-    let write_spec = WavSpec {
-        channels: 2,
-        sample_rate: 44100,
-        bits_per_sample: 16,
-        sample_format: SampleFormat::Int,
-    };
-    {
-        let mut writer = WavWriter::new_with_chunks(&mut buffer, write_spec, &[(*b"houn", b"12345")]).unwrap();
-        for s in -1024_i16..1024 {
-            writer.write_sample(s).unwrap();
-        }
-        writer.finalize().unwrap();
-    }
-    {
-        buffer.set_position(0);
-        let mut chunk_counter = 0;
-        let mut reader = WavReader::new_with_unknown_handler(&mut buffer, Some(&mut |code, data| {
-            assert_eq!(code, *b"houn");
-            assert_eq!(data, b"12345");
-            chunk_counter += 1;
-            Ok(())
-        })).unwrap();
-        assert_eq!(chunk_counter, 1);
-        assert_eq!(write_spec, reader.spec());
-        assert_eq!(reader.len(), 2048);
-        for (expected, read) in (-1024_i16..1024).zip(reader.samples()) {
-            assert_eq!(expected, read.unwrap());
+#[cfg(test)]
+macro_rules! gard {
+    ($pat:pat = $expr:expr => $block:block) => {
+        if let $pat = $expr {
+            $block
+        } else {
+            panic!("Expected {} to match {}", stringify!($expr), stringify!($pat))
         }
     }
 }
-*/
+
+#[test]
+fn read_non_standard_chunks() {
+    use std::fs;
+    use std::io::Read;
+    let mut file = fs::File::open("testsamples/nonstandard-01.wav").unwrap();
+    let mut reader = read::ChunksReader::new(&mut file).unwrap();
+    gard!(Some(read::Chunk::Unknown(kind, _reader)) = reader.next().unwrap() => {
+        assert_eq!(kind, *b"JUNK");
+    });
+    gard!(Some(read::Chunk::Unknown(kind, mut reader)) = reader.next().unwrap() => {
+        assert_eq!(kind, *b"bext");
+        let mut v = vec!();
+        reader.read_to_end(&mut v).unwrap();
+        assert!((0..v.len()).any(|offset| &v[offset..offset+9] == b"Pro Tools"));
+    });
+    gard!(Some(read::Chunk::Fmt(_)) = reader.next().unwrap() => { () });
+    gard!(Some(read::Chunk::Unknown(kind, _len)) = reader.next().unwrap() => {
+        assert_eq!(kind, *b"minf");
+    });
+    gard!(Some(read::Chunk::Data) = reader.next().unwrap() => { () });
+}
+
