@@ -794,6 +794,9 @@ impl<R> WavReader<R>
     pub fn new(reader: R) -> Result<WavReader<R>> {
         let mut reader = try!(ChunksReader::new(reader));
         try!(reader.read_until_data());
+        if reader.spec_ex.is_none() {
+            return Err(Error::FormatError("Wave file with no fmt header"))
+        }
         Ok(WavReader {
             reader: reader,
         })
@@ -802,7 +805,7 @@ impl<R> WavReader<R>
     /// Returns information about the WAVE file.
     pub fn spec(&self) -> WavSpec {
         self.reader.spec_ex
-            .expect("WavReader's chunk reader must have find a format")
+            .expect("Using a WavReader wrapping a ChunkReader with no spec")
             .spec
     }
 
