@@ -792,17 +792,6 @@ fn append_works_on_files() {
 }
 
 #[cfg(test)]
-macro_rules! panic_unless_let {
-    ($pat:pat = $expr:expr) => {
-        if let $pat = $expr {
-            ()
-        } else {
-            panic!("Expected {} to match {}", stringify!($expr), stringify!($pat))
-        }
-    }
-}
-
-#[cfg(test)]
 macro_rules! gard {
     ($pat:pat = $expr:expr => $block:block) => {
         if let $pat = $expr {
@@ -813,6 +802,7 @@ macro_rules! gard {
     }
 }
 
+#[cfg(test)]
 #[test]
 fn read_non_standard_chunks() {
     use std::fs;
