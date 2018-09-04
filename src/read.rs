@@ -202,7 +202,7 @@ impl<'r, R: 'r + io::Read> Drop for EmbeddedReader<'r, R> {
 
 impl<'r, R: io::Read> io::Read for EmbeddedReader<'r, R> {
     fn read(&mut self, buffer: &mut[u8]) -> io::Result<usize> {
-        let max = buffer.len().min(self.remaining as usize);
+        let max = cmp::min(buffer.len(), self.remaining as usize);
         let read = try!(self.reader.read(&mut buffer[0..max]));
         self.remaining -= read as i64;
         Ok(read)
@@ -700,7 +700,7 @@ impl<R: io::Read> io::Read for ChunksReader<R> {
         if data.remaining <= 0 {
             return Ok(0)
         }
-        let max = buffer.len().min(data.remaining as usize);
+        let max = cmp::min(buffer.len(), data.remaining as usize);
         let read = try!(self.reader.read(&mut buffer[0..max]));
         self.data_state.as_mut().unwrap().remaining -= read as i64;
         Ok(read)
