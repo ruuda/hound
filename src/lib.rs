@@ -792,7 +792,7 @@ fn append_works_on_files() {
 }
 
 #[cfg(test)]
-macro_rules! gard {
+macro_rules! guard {
     ($pat:pat = $expr:expr => $block:block) => {
         if let $pat = $expr {
             $block
@@ -809,19 +809,19 @@ fn read_non_standard_chunks() {
     use std::io::Read;
     let mut file = fs::File::open("testsamples/nonstandard-01.wav").unwrap();
     let mut reader = read::ChunksReader::new(&mut file).unwrap();
-    gard!(Some(read::Chunk::Unknown(kind, _reader)) = reader.next().unwrap() => {
+    guard!(Some(read::Chunk::Unknown(kind, _reader)) = reader.next().unwrap() => {
         assert_eq!(kind, *b"JUNK");
     });
-    gard!(Some(read::Chunk::Unknown(kind, mut reader)) = reader.next().unwrap() => {
+    guard!(Some(read::Chunk::Unknown(kind, mut reader)) = reader.next().unwrap() => {
         assert_eq!(kind, *b"bext");
         let mut v = vec!();
         reader.read_to_end(&mut v).unwrap();
         assert!((0..v.len()).any(|offset| &v[offset..offset+9] == b"Pro Tools"));
     });
-    gard!(Some(read::Chunk::Fmt(_)) = reader.next().unwrap() => { () });
-    gard!(Some(read::Chunk::Unknown(kind, _len)) = reader.next().unwrap() => {
+    guard!(Some(read::Chunk::Fmt(_)) = reader.next().unwrap() => { () });
+    guard!(Some(read::Chunk::Unknown(kind, _len)) = reader.next().unwrap() => {
         assert_eq!(kind, *b"minf");
     });
-    gard!(Some(read::Chunk::Data) = reader.next().unwrap() => { () });
+    guard!(Some(read::Chunk::Data) = reader.next().unwrap() => { () });
 }
 

@@ -179,6 +179,46 @@ impl<R> ReadExt for R
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct ChunkReadingState {
+    /// total length of the data chunk, in bytes
+    pub len: u64,
+    /// number of remaining bytes to be read in the data chunk
+    pub remaining: u64,
+}
+
+impl ChunkReadingState {
+    fn read<R:io::Read>(&mut self, reader: &mut R, buffer: &mut[u8]) -> io::Result<usize> {
+        let max = cmp::min(buffer.len(), self.remaining as usize);
+        let read = try!(reader.read(&mut buffer[0..max]));
+        self.remaining -= read as u64;
+        Ok(read)
+    }
+
+    fn seek<R: io::Read + io::Seek>(&mut self, reader: &mut R, seek: io::SeekFrom) -> io::Result<u64> {
+        let current_position = (self.len - self.remaining) as i64;
+        let wanted_position = match seek {
+           io::SeekFrom::Current(offset) => current_position + offset,
+           io::SeekFrom::Start(pos) => pos as i64,
+           io::SeekFrom::End(pos) => pos as i64 + self.len as i64,
+        };
+        if wanted_position < 0 {
+            Err(io::Error::new(io::ErrorKind::Other, "Seeking before begin of chunk"))
+        } else if wanted_position as u64 > self.len {
+            self.remaining = 0;
+            self.len = wanted_position as u64;
+            reader.seek(io::SeekFrom::Current(wanted_position - current_position))
+        } else {
+            self.remaining = (self.len as i64 - wanted_position) as u64;
+            reader.seek(io::SeekFrom::Current(wanted_position - current_position))
+        }
+    }
+
+    fn skip_remaining<R:io::Read>(&mut self, reader: &mut R) -> io::Result<()> {
+        reader.skip_bytes((self.remaining + self.len % 2) as usize)
+    }
+}
+
 /// A reader for safe Unknown chunks access.
 ///
 /// This reader borrow the underlying low-level reader from 
@@ -186,42 +226,27 @@ impl<R> ReadExt for R
 pub struct EmbeddedReader<'r, R: 'r + io::Read> {
     /// low-level reader
     reader: &'r mut R,
-    /// how long the chunk is, in bytes
-    pub len: i64,
-    /// how much bytes remains to be read
-    pub remaining: i64,
+    /// chunk boundaries enforcer
+    pub state: ChunkReadingState,
 }
 
 /// On drop, the EmbeddedReader will skip the remaining chunk bytes
 /// to reposition the underlying reader to the next chunk.
 impl<'r, R: 'r + io::Read> Drop for EmbeddedReader<'r, R> {
     fn drop(&mut self) {
-        let _ = self.reader.skip_bytes((self.remaining + self.len % 2) as usize);
+        let _ = self.state.skip_remaining(self.reader);
     }
 }
 
 impl<'r, R: io::Read> io::Read for EmbeddedReader<'r, R> {
     fn read(&mut self, buffer: &mut[u8]) -> io::Result<usize> {
-        let max = cmp::min(buffer.len(), self.remaining as usize);
-        let read = try!(self.reader.read(&mut buffer[0..max]));
-        self.remaining -= read as i64;
-        Ok(read)
+        self.state.read(&mut self.reader, buffer)
     }
 }
 
 impl<'r, R: io::Read + io::Seek> io::Seek for EmbeddedReader<'r, R> {
     fn seek(&mut self, seek: io::SeekFrom) -> io::Result<u64> {
-        if let io::SeekFrom::Current(offset) = seek {
-            let current_in_chunk = self.len as i64 - self.remaining as i64;
-            let wanted_in_chunk = current_in_chunk as i64 + offset;
-            if wanted_in_chunk < 0 {
-                Err(io::Error::new(io::ErrorKind::Other, "Seeking befoer begin of chunk"))
-            } else {
-                self.reader.seek(io::SeekFrom::Current(offset))
-            }
-        } else {
-            Err(io::Error::new(io::ErrorKind::Other, "Only relative seek is supported."))
-        }
+        self.state.seek(&mut self.reader, seek)
     }
 }
 
@@ -258,10 +283,8 @@ pub struct ChunksReader<R: io::Read> {
 pub struct DataReadingState {
     /// the format specification for the file
     pub spec_ex: WavSpecEx,
-    /// total length of the data chunk, in bytes
-    pub len: i64,
-    /// number of remaining bytes to be read in the data chunk
-    pub remaining: i64,
+    /// chunk boundaries enforcer
+    pub chunk: ChunkReadingState,
 }
 
 impl<R: io::Read> ChunksReader<R> {
@@ -305,7 +328,7 @@ impl<R: io::Read> ChunksReader<R> {
 
     }
 
-    /// Same as `samples`, but takes ownership of the `WavReader`.
+    /// Same as `samples`, but takes ownership of the `ChunksReader`.
     ///
     /// See `samples()` for more info.
     pub fn into_samples<S: Sample>(self) -> WavIntoSamples<R, S> {
@@ -314,34 +337,6 @@ impl<R: io::Read> ChunksReader<R> {
             reader: self,
             phantom_sample: marker::PhantomData,
         }
-    }
-
-    /// Returns the duration of the file in samples.
-    ///
-    /// The duration is independent of the number of channels. It is expressed
-    /// in units of samples. The duration in seconds can be obtained by
-    /// dividing this number by the sample rate. The duration is independent of
-    /// how many samples have been read already.
-    ///
-    /// This function will panic if it is called while the reader is not in
-    /// the data chunk, or if the format has not been parsed.
-    pub fn duration(&self) -> u32 {
-        let data = self.data_state.expect("Not in the data chunk.");
-        self.len() / data.spec_ex.spec.channels as u32
-    }
-
-    /// Returns the number of values that the sample iterator will yield.
-    ///
-    /// The length of the file is its duration (in samples) times the number of
-    /// channels. The length is independent of how many samples have been read
-    /// already. To get the number of samples left, use `len()` on the
-    /// `samples()` iterator.
-    ///
-    /// This function will panic if it is called while the reader is not in
-    /// the data chunk, or if the format has not been parsed.
-    pub fn len(&self) -> u32 {
-        let data = self.data_state.expect("Not in the data chunk.");
-        data.len as u32 / data.spec_ex.bytes_per_sample as u32
     }
 
     /// Parse the next chunk from the reader.
@@ -356,13 +351,13 @@ impl<R: io::Read> ChunksReader<R> {
     /// of the first sample, and `data_state` will be created to allow
     /// keep track of the audio samples parsing.
     pub fn next(&mut self) -> Result<Option<Chunk<R>>> {
-        if let Some(data) = self.data_state {
-            try!(self.reader.skip_bytes(data.remaining as usize));
-            self.data_state = None
+        if let Some(ref mut data) = self.data_state {
+            try!(data.chunk.skip_remaining(&mut self.reader))
         }
+        self.data_state = None;
         let mut kind_str = [0; 4];
         if let Err(_) = self.reader.read_into(&mut kind_str) {
-            // assumes EOF
+            // FIXME EOF is indistinguishable from actual errors in read_into
             return Ok(None);
         }
         let len = try!(self.reader.read_le_u32());
@@ -390,8 +385,7 @@ impl<R: io::Read> ChunksReader<R> {
                 if let Some(spec_ex) = self.spec_ex {
                     self.data_state = Some(DataReadingState {
                         spec_ex: spec_ex,
-                        len: len as i64,
-                        remaining: len as i64,
+                        chunk: ChunkReadingState { len: len as u64, remaining: len as u64}
                     });
                     return Ok(Some(Chunk::Data));
                 } else {
@@ -401,8 +395,7 @@ impl<R: io::Read> ChunksReader<R> {
             _ => {
                 let reader = EmbeddedReader {
                     reader: &mut self.reader,
-                    len: len as i64,
-                    remaining: len as i64,
+                    state: ChunkReadingState { len: len as u64, remaining: len as u64 }
                 };
                 return Ok(Some(Chunk::Unknown(kind_str, reader)));
             }
@@ -683,27 +676,18 @@ impl<R: io::Read> ChunksReader<R> {
     pub fn seek(&mut self, time: u32) -> io::Result<()>
         where R: io::Seek,
     {
-        let data = self.data_state.expect("Not in the data chunk.");
+        let data = self.data_state.as_mut().expect("Not in the data chunk.");
         let wanted_sample = time as i64 * data.spec_ex.spec.channels as i64;
         let wanted_byte = wanted_sample * data.spec_ex.bytes_per_sample as i64;
-        let current_byte = data.len - data.remaining;
-        let offset = wanted_byte - current_byte;
-        try!(self.reader.seek(io::SeekFrom::Current(offset)));
-        self.data_state.as_mut().unwrap().remaining = data.remaining - offset;
+        try!(data.chunk.seek(&mut self.reader, io::SeekFrom::Start(wanted_byte as u64)));
         Ok(())
     }
 }
 
 impl<R: io::Read> io::Read for ChunksReader<R> {
     fn read(&mut self, buffer: &mut[u8]) -> io::Result<usize> {
-        let data = self.data_state.expect("Not in the data chunk.");
-        if data.remaining <= 0 {
-            return Ok(0)
-        }
-        let max = cmp::min(buffer.len(), data.remaining as usize);
-        let read = try!(self.reader.read(&mut buffer[0..max]));
-        self.data_state.as_mut().unwrap().remaining -= read as i64;
-        Ok(read)
+        let data = self.data_state.as_mut().expect("Not in the data chunk.");
+        data.chunk.read(&mut self.reader, buffer)
     }
 }
 
@@ -842,7 +826,8 @@ impl<R> WavReader<R>
     /// dividing this number by the sample rate. The duration is independent of
     /// how many samples have been read already.
     pub fn duration(&self) -> u32 {
-        self.reader.duration()
+        let data = self.reader.data_state.expect("Not in the data chunk.");
+        self.len() / data.spec_ex.spec.channels as u32
     }
 
     /// Returns the number of values that the sample iterator will yield.
@@ -852,7 +837,8 @@ impl<R> WavReader<R>
     /// already. To get the number of samples left, use `len()` on the
     /// `samples()` iterator.
     pub fn len(&self) -> u32 {
-        self.reader.len()
+        let data = self.reader.data_state.expect("not in the data chunk");
+        (data.chunk.len as usize / data.spec_ex.bytes_per_sample as usize) as u32
     }
 
     /// Destroys the `WavReader` and returns the underlying reader.
@@ -894,7 +880,7 @@ fn iter_next<R, S>(reader: &mut ChunksReader<R>) -> Option<Result<S>>
           S: Sample
 {
     let data = reader.data_state.expect("reader not in data chunk");
-    if data.remaining > 0 {
+    if data.chunk.remaining > 0 {
         let sample = Sample::read(reader,
                                   data.spec_ex.spec.sample_format,
                                   data.spec_ex.bytes_per_sample,
@@ -907,7 +893,7 @@ fn iter_next<R, S>(reader: &mut ChunksReader<R>) -> Option<Result<S>>
 
 fn iter_size_hint<R: io::Read>(reader: &ChunksReader<R>) -> (usize, Option<usize>) {
     let data = reader.data_state.expect("reader not in data chunk");
-    let samples_left = (data.remaining / data.spec_ex.bytes_per_sample as i64) as usize;
+    let samples_left = data.chunk.remaining as usize / data.spec_ex.bytes_per_sample as usize;
     (samples_left, Some(samples_left))
 }
 
@@ -1322,7 +1308,6 @@ fn seek_is_consistent() {
                   "testsamples/waveformatextensible-32bit-48kHz-stereo.wav"];
     for fname in files {
         let mut reader = WavReader::open(fname).unwrap();
-
         // Seeking back to the start should "reset" the reader.
         let count = reader.samples::<i32>().count();
         reader.seek(0).unwrap();

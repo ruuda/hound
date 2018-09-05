@@ -555,11 +555,11 @@ fn read_append<W: io::Read + io::Seek>(reader: &mut W) -> Result<(WavSpecEx, u32
     // later.
     let data_len_offset = try!(reader.seek(io::SeekFrom::Current(0))) as u32 - 4;
 
-    let num_samples = data_state.len / spec_ex.bytes_per_sample as i64;
+    let num_samples = data_state.chunk.len / spec_ex.bytes_per_sample as u64;
 
     // There must not be trailing bytes in the data chunk, otherwise the
     // bytes we write will be off.
-    if num_samples * data_state.spec_ex.bytes_per_sample as i64 != data_state.len {
+    if num_samples * data_state.spec_ex.bytes_per_sample as u64 != data_state.chunk.len {
         let msg = "data chunk length is not a multiple of sample size";
         return Err(Error::FormatError(msg));
     }
@@ -581,11 +581,11 @@ fn read_append<W: io::Read + io::Seek>(reader: &mut W) -> Result<(WavSpecEx, u32
     // The number of samples must be a multiple of the number of channels,
     // otherwise the last inter-channel sample would not have data for all
     // channels.
-    if num_samples % spec_ex.spec.channels as i64 != 0 {
+    if num_samples % spec_ex.spec.channels as u64 != 0 {
         return Err(Error::FormatError("invalid data chunk length"));
     }
 
-    Ok((spec_ex, data_state.len as u32, data_len_offset))
+    Ok((spec_ex, data_state.chunk.len as u32, data_len_offset))
 }
 
 impl WavWriter<io::BufWriter<fs::File>> {
