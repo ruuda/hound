@@ -544,29 +544,29 @@ impl<W> Drop for WavWriter<W>
 /// Reads the relevant parts of the header required to support append.
 ///
 /// Returns (spec_ex, data_len, data_len_offset).
-fn read_append<W: io::Read + io::Seek>(mut reader: &mut W) -> Result<(WavSpecEx, u32, u32)> {
-    let (spec_ex, data_len) = {
-        try!(read::read_wave_header(&mut reader));
-        try!(read::read_until_data(&mut reader))
-    };
+fn read_append<W: io::Read + io::Seek>(reader: &mut W) -> Result<(WavSpecEx, u32, u32)> {
+    let mut chunk_reader = try!(read::ChunksReader::new(reader));
+    try!(chunk_reader.read_until_data());
+    let data_state = chunk_reader.data_state.expect("Reader should be inside data chunk");
+    let spec_ex = data_state.spec_ex;
+    let reader = chunk_reader.into_inner();
 
     // Record the position of the data chunk length, so we can overwrite it
     // later.
     let data_len_offset = try!(reader.seek(io::SeekFrom::Current(0))) as u32 - 4;
 
-    let spec = spec_ex.spec;
-    let num_samples = data_len / spec_ex.bytes_per_sample as u32;
+    let num_samples = data_state.chunk.len / spec_ex.bytes_per_sample as u64;
 
     // There must not be trailing bytes in the data chunk, otherwise the
     // bytes we write will be off.
-    if num_samples * spec_ex.bytes_per_sample as u32 != data_len {
+    if num_samples * data_state.spec_ex.bytes_per_sample as u64 != data_state.chunk.len {
         let msg = "data chunk length is not a multiple of sample size";
         return Err(Error::FormatError(msg));
     }
 
     // Hound cannot read or write other bit depths than those, so rather
     // than refusing to write later, fail early.
-    let supported = match (spec_ex.bytes_per_sample, spec.bits_per_sample) {
+    let supported = match (spec_ex.bytes_per_sample, spec_ex.spec.bits_per_sample) {
         (1, 8) => true,
         (2, 16) => true,
         (3, 24) => true,
@@ -581,11 +581,11 @@ fn read_append<W: io::Read + io::Seek>(mut reader: &mut W) -> Result<(WavSpecEx,
     // The number of samples must be a multiple of the number of channels,
     // otherwise the last inter-channel sample would not have data for all
     // channels.
-    if num_samples % spec_ex.spec.channels as u32 != 0 {
+    if num_samples % spec_ex.spec.channels as u64 != 0 {
         return Err(Error::FormatError("invalid data chunk length"));
     }
 
-    Ok((spec_ex, data_len, data_len_offset))
+    Ok((spec_ex, data_state.chunk.len as u32, data_len_offset))
 }
 
 impl WavWriter<io::BufWriter<fs::File>> {
