@@ -658,7 +658,7 @@ impl<R: io::Read> ChunksReader<R> {
         Ok(spec_ex)
     }
 
-
+    /// Unwrap the raw Reader from this Chunkreader
     pub fn into_inner(self) -> R {
         self.reader
     }

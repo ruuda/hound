@@ -68,6 +68,9 @@ mod write;
 pub use read::{WavReader, WavIntoSamples, WavSamples, read_wave_header};
 pub use write::{SampleWriter16, WavWriter};
 
+pub use read::ChunksReader;
+pub use write::ChunksWriter;
+
 /// A type that can be used to represent audio samples.
 ///
 /// Via this trait, decoding can be generic over `i8`, `i16`, `i32` and `f32`.
@@ -823,5 +826,53 @@ fn read_non_standard_chunks() {
         assert_eq!(kind, *b"minf");
     });
     guard!(Some(read::Chunk::Data) = reader.next().unwrap() => { () });
+
+    assert!(reader.next().unwrap().is_none());
+}
+
+#[cfg(test)]
+#[test]
+fn write_read_chunks_is_lossless() {
+    use std::io::{ Read, Write };
+
+    let write_spec = WavSpec {
+        channels: 2,
+        sample_rate: 44100,
+        bits_per_sample: 16,
+        sample_format: SampleFormat::Int,
+    };
+    for len in 0..5 {
+        let vec = Vec::new();
+        let value = &b"12345"[..len];
+        let mut buffer = io::Cursor::new(vec);
+        {
+            let mut writer = ::write::ChunksWriter::new(&mut buffer).unwrap();
+            writer.write_fmt(write_spec).unwrap();
+            writer.start_chunk(*b"houn").unwrap().write_all(value).unwrap();
+            writer.start_data_chunk().unwrap();
+            for s in -1024_i16..1024 {
+                writer.write_sample(s).unwrap();
+            }
+            writer.finalize().unwrap();
+        }
+        {
+            buffer.set_position(0);
+            //let mut chunk_counter = 0;
+
+            let mut reader = read::ChunksReader::new(&mut buffer).unwrap();
+            guard!(Some(read::Chunk::Fmt(_)) = reader.next().unwrap() => { () });
+
+            guard!(Some(read::Chunk::Unknown(kind, mut reader)) = reader.next().unwrap() => {
+                assert_eq!(kind, *b"houn");
+                let mut v = vec!();
+                reader.read_to_end(&mut v).unwrap();
+                assert_eq!(&v[..], value);
+            });
+
+            guard!(Some(read::Chunk::Data) = reader.next().unwrap() => { () });
+
+            assert!(reader.next().unwrap().is_none());
+        }
+    }
 }
 
