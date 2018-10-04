@@ -221,7 +221,7 @@ impl ChunkReadingState {
 
 /// A reader for safe Unknown chunks access.
 ///
-/// This reader borrow the underlying low-level reader from 
+/// This reader borrow the underlying low-level reader from
 /// the ChunkReader, and enforce chunk boundaries.
 pub struct EmbeddedReader<'r, R: 'r + io::Read> {
     /// low-level reader
@@ -319,7 +319,7 @@ impl<R: io::Read> ChunksReader<R> {
     ///
     /// This function will panic if it is called while the reader is not in
     /// the data chunk, or if the format has not been parsed.
-    pub fn samples<'wr, S: Sample>(&'wr mut self) -> WavSamples<'wr, R, S> {
+    pub fn samples<S: Sample>(&mut self) -> WavSamples<R, S> {
         let _data_state = self.data_state.expect("Not in the data chunk.");
         WavSamples {
             reader: self,
@@ -356,7 +356,7 @@ impl<R: io::Read> ChunksReader<R> {
         }
         self.data_state = None;
         let mut kind_str = [0; 4];
-        if let Err(_) = self.reader.read_into(&mut kind_str) {
+        if self.reader.read_into(&mut kind_str).is_err() {
             // FIXME EOF is indistinguishable from actual errors in read_into
             return Ok(None);
         }
@@ -365,7 +365,7 @@ impl<R: io::Read> ChunksReader<R> {
             b"fmt " => {
                 let spec_ex = try!(self.read_fmt_chunk(len));
                 self.spec_ex = Some(spec_ex);
-                return Ok(Some(Chunk::Fmt(spec_ex)))
+                Ok(Some(Chunk::Fmt(spec_ex)))
             }
             b"fact" => {
                 // All (compressed) non-PCM formats must have a fact chunk
@@ -379,7 +379,7 @@ impl<R: io::Read> ChunksReader<R> {
                 // from the Format chunk.
                 // http://www-mmsp.ece.mcgill.ca/documents/audioformats/wave/wave.html
                 let _samples_per_channel = self.reader.read_le_u32();
-                return Ok(Some(Chunk::Fact))
+                Ok(Some(Chunk::Fact))
             }
             b"data" => {
                 if let Some(spec_ex) = self.spec_ex {
@@ -387,9 +387,9 @@ impl<R: io::Read> ChunksReader<R> {
                         spec_ex: spec_ex,
                         chunk: ChunkReadingState { len: len as u64, remaining: len as u64}
                     });
-                    return Ok(Some(Chunk::Data));
+                    Ok(Some(Chunk::Data))
                 } else {
-                    return Err(Error::FormatError("missing fmt chunk"))
+                    Err(Error::FormatError("missing fmt chunk"))
                 }
             }
             _ => {
@@ -397,7 +397,7 @@ impl<R: io::Read> ChunksReader<R> {
                     reader: &mut self.reader,
                     state: ChunkReadingState { len: len as u64, remaining: len as u64 }
                 };
-                return Ok(Some(Chunk::Unknown(kind_str, reader)));
+                Ok(Some(Chunk::Unknown(kind_str, reader)))
             }
         }
         // If no data chunk is ever encountered, the function will return

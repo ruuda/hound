@@ -236,13 +236,13 @@ impl<W> WavWriter<W>
             let mut buffer = io::Cursor::new(&mut header[..]);
 
             // Write the headers for the RIFF WAVE format.
-            try!(buffer.write_all("RIFF".as_bytes()));
+            try!(buffer.write_all(b"RIFF"));
 
             // Skip 4 bytes that will be filled with the file size afterwards.
             try!(buffer.write_le_u32(0));
 
-            try!(buffer.write_all("WAVE".as_bytes()));
-            try!(buffer.write_all("fmt ".as_bytes()));
+            try!(buffer.write_all(b"WAVE"));
+            try!(buffer.write_all(b"fmt "));
 
             match fmt_kind {
                 FmtKind::PcmWaveFormat => {
@@ -256,7 +256,7 @@ impl<W> WavWriter<W>
             // Finally the header of the "data" chunk. The number of bytes
             // that this will take is not known at this point. The 0 will
             // be overwritten later.
-            try!(buffer.write_all("data".as_bytes()));
+            try!(buffer.write_all(b"data"));
             try!(buffer.write_le_u32(0));
         }
 
@@ -403,9 +403,7 @@ impl<W> WavWriter<W>
     ///
     /// Attempting to write more than `num_samples` samples to the writer will
     /// panic too.
-    pub fn get_i16_writer<'s>(&'s mut self,
-                              num_samples: u32)
-                              -> SampleWriter16<'s, W> {
+    pub fn get_i16_writer(&mut self, num_samples: u32) -> SampleWriter16<W> {
         if self.spec.sample_format != SampleFormat::Int {
             panic!("When calling get_i16_writer, the sample format must be int.");
         }
@@ -732,7 +730,7 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
         // x86_64 is little endian, so we do not need to shuffle bytes around;
         // we can just store the 16-bit integer in the buffer directly.
         use std::mem;
-        let ptr: *mut u16 = mem::transmute(self.buffer.get_unchecked_mut(self.index as usize));
+        let ptr = self.buffer.get_unchecked_mut(self.index as usize) as *mut u8 as *mut u16;
         *ptr = value;
     }
 
