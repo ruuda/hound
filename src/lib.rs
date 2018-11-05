@@ -68,7 +68,7 @@ mod write;
 pub use read::{WavReader, WavIntoSamples, WavSamples, read_wave_header};
 pub use write::{SampleWriter16, WavWriter};
 
-pub use read::ChunksReader;
+pub use read::{ Chunk, ChunksReader };
 pub use write::ChunksWriter;
 
 /// A type that can be used to represent audio samples.
