@@ -794,7 +794,7 @@ impl WavWriter<io::BufWriter<fs::File>> {
                 spec_ex: Some(spec_ex),
                 writer: buf_writer,
                 sample_writer_buffer: Vec::new(),
-                dirty: false,
+                dirty: true,
                 data_state: Some(ChunkWritingState { len: data_len }),
             }
         };
@@ -824,7 +824,7 @@ impl<W> WavWriter<W> where W: io::Read + io::Write + io::Seek {
                 spec_ex: Some(spec_ex),
                 writer: writer,
                 sample_writer_buffer: Vec::new(),
-                dirty: false,
+                dirty: true,
                 data_state: Some(ChunkWritingState { len: data_len }),
             }
         };
