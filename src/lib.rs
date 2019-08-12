@@ -443,6 +443,7 @@ impl WavSpec {
     ///
     /// ```no_run
     /// extern crate hound;
+    /// use std::io::Write;
     /// 
     /// let spec = hound::WavSpec {
     ///     bits_per_sample: 16,
@@ -455,7 +456,6 @@ impl WavSpec {
     /// 
     /// let so = std::io::stdout();
     /// let mut so = so.lock();
-    /// use std::io::Write;
     /// so.write_all(&v[..]).unwrap();
     /// 
     /// loop {
