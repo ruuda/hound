@@ -432,15 +432,15 @@ const KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: [u8; 16] = [0x03, 0x00, 0x00, 0x00, 0x00,
 impl WavSpec {
     /// Get "stand-alone" wav header representing infinite or unknown size wav file.
     /// Use this if you need to write audio data to non-seekable sinks (like stdout).
-    /// 
+    ///
     /// Actual samples are supposed to be written without `hound`'s help.
-    /// 
+    ///
     /// Such wav files are produced e.g. by FFmpeg and have 0xFFFFFFFF instead of chunk sizes.
-    /// 
+    ///
     /// Note that such files may be non-standard. Consider using `WavWriter` for better API.
-    /// 
+    ///
     /// Example:
-    /// 
+    ///
     /// ```no_run
     /// extern crate hound;
     /// 
@@ -465,11 +465,12 @@ impl WavSpec {
     /// }
     /// ```
     pub fn into_header_for_infinite_file(self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(0x44);
+        let mut c = std::io::Cursor::new(Vec::with_capacity(0x44));
         {
-            let w = WavWriter::new(std::io::Cursor::new(&mut v), self);
+            let w = WavWriter::new(&mut c, self);
             drop(w);
         }
+        let mut v = c.into_inner();
 
         // Set WAVE chunk size to a special signal value
         v[4] = 0xFF; v[5] = 0xFF; v[6] = 0xFF; v[7] = 0xFF;
