@@ -425,6 +425,67 @@ const KSDATAFORMAT_SUBTYPE_PCM: [u8; 16] = [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 
 const KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: [u8; 16] = [0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
                                                    0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71];
 
+
+impl WavSpec {
+    /// Get "stand-alone" wav header representing infinite or unknown size wav file.
+    /// Use this if you need to write audio data to non-seekable sinks (like stdout).
+    /// 
+    /// Actual samples are supposed to be written without `hound`'s help.
+    /// 
+    /// Such wav files are produced e.g. by FFmpeg and have 0xFFFFFFFF instead of chunk sizes.
+    /// 
+    /// Note that such files may be non-standard. Consider using `WavWriter` for better API.
+    /// 
+    /// Example:
+    /// 
+    /// ```no_run
+    /// extern crate hound;
+    /// 
+    /// let spec = hound::WavSpec {
+    ///     bits_per_sample: 16,
+    ///     channels: 1,
+    ///     sample_format: hound::SampleFormat::Int,
+    ///     sample_rate: 16000,
+    /// };
+    /// 
+    /// let v = spec.into_header_for_infinite_file();
+    /// 
+    /// let so = std::io::stdout();
+    /// let mut so = so.lock();
+    /// use std::io::Write;
+    /// so.write_all(&v[..]).unwrap();
+    /// 
+    /// loop {
+    ///     for i in 0..1000 {
+    ///         so.write_all(&[0, (i % 60) as u8]).unwrap();
+    ///     }
+    /// }
+    /// ```
+    pub fn into_header_for_infinite_file(self) -> Vec<u8> {
+        let mut v = Vec::with_capacity(0x44);
+        {
+            let w = WavWriter::new(std::io::Cursor::new(&mut v), self);
+            drop(w);
+        }
+
+        // Set WAVE chunk size to a special signal value
+        v[4] = 0xFF; v[5] = 0xFF; v[6] = 0xFF; v[7] = 0xFF;
+
+        // Detect fmt size, get offset of data chunk's size and set it to signal value
+        if v[16] == 0x10 {
+            // pcm wave
+            v[0x28] = 0xFF; v[0x29] = 0xFF; v[0x2A] = 0xFF; v[0x2B] = 0xFF; 
+        } else if v[16] == 0x28 {
+            // extensible
+            v[0x40] = 0xFF; v[0x41] = 0xFF; v[0x42] = 0xFF; v[0x43] = 0xFF; 
+        } else {
+            unreachable!()
+        }
+
+        v
+    }
+}
+
 #[test]
 fn write_read_i16_is_lossless() {
     let mut buffer = io::Cursor::new(Vec::new());
@@ -789,4 +850,32 @@ fn append_works_on_files() {
     assert_eq!(fs::metadata("append.wav").unwrap().len(), len + 4);
 
     assert_contents("append.wav", &[11, 13, 17, 19, 23]);
+}
+
+#[cfg(test)]
+#[test]
+fn test_into_header_for_infinite_file() {
+    let spec = WavSpec {
+        bits_per_sample: 16,
+        channels: 1,
+        sample_format: SampleFormat::Int,
+        sample_rate: 16000,
+    };
+    let v = spec.into_header_for_infinite_file();
+    assert_eq!(&v[..], &b"RIFF\xFF\xFF\xFF\xFFWAVE\
+fmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\x3e\x00\x00\x00\x7d\x00\x00\x02\x00\x10\x00\
+data\xFF\xFF\xFF\xFF"[..]);
+
+    let spec = WavSpec {
+        bits_per_sample: 16,
+        channels: 10,
+        sample_format: SampleFormat::Int,
+        sample_rate: 16000,
+    };
+    let v = spec.into_header_for_infinite_file();
+    assert_eq!(&v[..], &b"RIFF\xFF\xFF\xFF\xFFWAVE\
+fmt \x28\x00\x00\x00\xfe\xff\x0a\x00\x80\x3e\x00\x00\x00\xe2\x04\x00\
+\x14\x00\x10\x00\x16\x00\x10\x00\xff\x03\x00\x00\x01\x00\x00\x00\
+\x00\x00\x10\x00\x80\x00\x00\xaa\x00\x38\x9b\x71\
+data\xFF\xFF\xFF\xFF"[..]);
 }
