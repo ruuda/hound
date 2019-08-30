@@ -280,13 +280,24 @@ impl Sample for f32 {
     }
 
     fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<Self> {
-        if fmt != SampleFormat::Float {
-            return Err(Error::InvalidSampleFormat);
-        }
-        match (bytes, bits) {
-            (4, 32) => Ok(try!(reader.read_le_f32())),
-            (n, _) if n > 4 => Err(Error::TooWide),
-            _ => Err(Error::Unsupported),
+        match fmt {
+            SampleFormat::Float =>
+                match (bytes, bits) {
+                    (4, 32) => Ok(try!(reader.read_le_f32())),
+                    (n, _) if n > 4 => Err(Error::TooWide),
+                    _ => Err(Error::Unsupported),
+                },
+            SampleFormat::Int =>
+                // 32-bit IEEE floats can represent signed integers up to 24 bits wide exactly
+                // (actually: 25 bits).
+                match (bytes, bits) {
+                    (1, 8) => Ok(try!(reader.read_u8().map(signed_from_u8).map(|x| x as f32))),
+                    (2, 16) => Ok(try!(reader.read_le_i16().map(|x| x as f32))),
+                    (3, 24) => Ok(try!(reader.read_le_i24()) as f32),
+                    (n, _) if n > 3 => Err(Error::TooWide),
+                    // TODO: add a generic decoder for any bit depth.
+                    _ => Err(Error::Unsupported),
+                }
         }
     }
 }

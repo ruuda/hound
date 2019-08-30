@@ -1232,6 +1232,7 @@ fn wide_read_should_signal_error() {
     assert!(reader24.samples::<i8>().next().unwrap().is_err());
     assert!(reader24.samples::<i16>().next().unwrap().is_err());
     assert!(reader24.samples::<i32>().next().unwrap().is_ok());
+    assert!(reader24.samples::<f32>().next().unwrap().is_ok());
 
     let mut reader32 = WavReader::open("testsamples/waveformatextensible-32bit-48kHz-stereo.wav")
         .unwrap();
@@ -1240,6 +1241,7 @@ fn wide_read_should_signal_error() {
     assert!(reader32.samples::<i8>().next().unwrap().is_err());
     assert!(reader32.samples::<i16>().next().unwrap().is_err());
     assert!(reader32.samples::<i32>().next().unwrap().is_ok());
+    assert!(reader32.samples::<f32>().next().unwrap().is_err());
 }
 
 #[test]
@@ -1257,7 +1259,7 @@ fn sample_format_mismatch_should_signal_error() {
     assert!(reader_i8.samples::<i8>().next().unwrap().is_ok());
     assert!(reader_i8.samples::<i16>().next().unwrap().is_ok());
     assert!(reader_i8.samples::<i32>().next().unwrap().is_ok());
-    assert!(reader_i8.samples::<f32>().next().unwrap().is_err());
+    assert!(reader_i8.samples::<f32>().next().unwrap().is_ok());
 }
 
 #[test]
