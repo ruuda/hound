@@ -430,11 +430,11 @@ impl WavSpec {
     /// Get "stand-alone" wav header representing infinite or unknown size wav file.
     /// Use this if you need to write audio data to non-seekable sinks (like stdout).
     ///
-    /// Actual samples are supposed to be written without `hound`'s help.
+    /// Actual samples are supposed to be written using low-level [`Sample::write`] call.
     ///
-    /// Such wav files are produced e.g. by FFmpeg and have 0xFFFFFFFF instead of chunk sizes.
+    /// Such wav files are produced e.g. by FFmpeg and have `0xFFFFFFFF` instead of chunk sizes.
     ///
-    /// Note that such files may be non-standard. Consider using `WavWriter` for better API.
+    /// Note that such files may be non-standard. Consider using [`WavWriter`] for better API.
     ///
     /// Example:
     ///
@@ -456,9 +456,10 @@ impl WavSpec {
     /// so.write_all(&v[..]).unwrap();
     /// 
     /// loop {
-    ///     for i in 0..1000 {
-    ///         so.write_all(&[0, (i % 60) as u8]).unwrap();
-    ///     }
+    ///    for i in 0..126 {
+    ///       let x : i16 = (i * 256) as i16;
+    ///       hound::Sample::write(x, &mut so, 16).unwrap();
+    ///    }
     /// }
     /// ```
     pub fn into_header_for_infinite_file(self) -> Vec<u8> {
