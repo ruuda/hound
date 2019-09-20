@@ -1263,6 +1263,54 @@ fn sample_format_mismatch_should_signal_error() {
 }
 
 #[test]
+fn read_as_i32_should_equal_read_as_f32() {
+    let samples_i32: Vec<i32> = WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav")
+        .unwrap()
+        .samples::<i32>()
+        .map(Result::unwrap)
+        .collect();
+    let samples_f32: Vec<f32> = WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav")
+        .unwrap()
+        .samples::<f32>()
+        .map(Result::unwrap)
+        .collect();
+    for (&sample_i32, &sample_f32) in samples_i32.iter().zip(&samples_f32) {
+        assert_eq!(sample_i32, sample_f32 as i32);
+        assert_eq!(sample_i32 as f32, sample_f32);
+    }
+
+    let samples_i32: Vec<i32> = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav")
+        .unwrap()
+        .samples::<i32>()
+        .map(Result::unwrap)
+        .collect();
+    let samples_f32: Vec<f32> = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav")
+        .unwrap()
+        .samples::<f32>()
+        .map(Result::unwrap)
+        .collect();
+    for (&sample_i32, &sample_f32) in samples_i32.iter().zip(&samples_f32) {
+        assert_eq!(sample_i32, sample_f32 as i32);
+        assert_eq!(sample_i32 as f32, sample_f32);
+    }
+
+    let samples_i32: Vec<i32> = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
+        .unwrap()
+        .samples::<i32>()
+        .map(Result::unwrap)
+        .collect();
+    let samples_f32: Vec<f32> = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
+        .unwrap()
+        .samples::<f32>()
+        .map(Result::unwrap)
+        .collect();
+    for (&sample_i32, &sample_f32) in samples_i32.iter().zip(&samples_f32) {
+        assert_eq!(sample_i32, sample_f32 as i32);
+        assert_eq!(sample_i32 as f32, sample_f32);
+    }
+}
+
+#[test]
 fn fuzz_crashes_should_be_fixed() {
     use std::fs;
     use std::ffi::OsStr;
