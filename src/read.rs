@@ -1232,6 +1232,7 @@ fn wide_read_should_signal_error() {
     assert!(reader24.samples::<i8>().next().unwrap().is_err());
     assert!(reader24.samples::<i16>().next().unwrap().is_err());
     assert!(reader24.samples::<i32>().next().unwrap().is_ok());
+    assert!(reader24.samples::<f32>().next().unwrap().is_ok());
 
     let mut reader32 = WavReader::open("testsamples/waveformatextensible-32bit-48kHz-stereo.wav")
         .unwrap();
@@ -1240,6 +1241,7 @@ fn wide_read_should_signal_error() {
     assert!(reader32.samples::<i8>().next().unwrap().is_err());
     assert!(reader32.samples::<i16>().next().unwrap().is_err());
     assert!(reader32.samples::<i32>().next().unwrap().is_ok());
+    assert!(reader32.samples::<f32>().next().unwrap().is_err());
 }
 
 #[test]
@@ -1257,7 +1259,55 @@ fn sample_format_mismatch_should_signal_error() {
     assert!(reader_i8.samples::<i8>().next().unwrap().is_ok());
     assert!(reader_i8.samples::<i16>().next().unwrap().is_ok());
     assert!(reader_i8.samples::<i32>().next().unwrap().is_ok());
-    assert!(reader_i8.samples::<f32>().next().unwrap().is_err());
+    assert!(reader_i8.samples::<f32>().next().unwrap().is_ok());
+}
+
+#[test]
+fn read_as_i32_should_equal_read_as_f32() {
+    let samples_i32: Vec<i32> = WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav")
+        .unwrap()
+        .samples::<i32>()
+        .map(Result::unwrap)
+        .collect();
+    let samples_f32: Vec<f32> = WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav")
+        .unwrap()
+        .samples::<f32>()
+        .map(Result::unwrap)
+        .collect();
+    for (&sample_i32, &sample_f32) in samples_i32.iter().zip(&samples_f32) {
+        assert_eq!(sample_i32, sample_f32 as i32);
+        assert_eq!(sample_i32 as f32, sample_f32);
+    }
+
+    let samples_i32: Vec<i32> = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav")
+        .unwrap()
+        .samples::<i32>()
+        .map(Result::unwrap)
+        .collect();
+    let samples_f32: Vec<f32> = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav")
+        .unwrap()
+        .samples::<f32>()
+        .map(Result::unwrap)
+        .collect();
+    for (&sample_i32, &sample_f32) in samples_i32.iter().zip(&samples_f32) {
+        assert_eq!(sample_i32, sample_f32 as i32);
+        assert_eq!(sample_i32 as f32, sample_f32);
+    }
+
+    let samples_i32: Vec<i32> = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
+        .unwrap()
+        .samples::<i32>()
+        .map(Result::unwrap)
+        .collect();
+    let samples_f32: Vec<f32> = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
+        .unwrap()
+        .samples::<f32>()
+        .map(Result::unwrap)
+        .collect();
+    for (&sample_i32, &sample_f32) in samples_i32.iter().zip(&samples_f32) {
+        assert_eq!(sample_i32, sample_f32 as i32);
+        assert_eq!(sample_i32 as f32, sample_f32);
+    }
 }
 
 #[test]
