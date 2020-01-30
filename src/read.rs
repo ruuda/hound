@@ -52,6 +52,11 @@ pub trait ReadExt: io::Read {
     /// The sign bit will be extended into the most significant byte.
     fn read_le_i24(&mut self) -> io::Result<i32>;
 
+    /// Reads four bytes and interprets them as a little-endian 24-bit signed integer.
+    ///
+    /// The sign bit will be extended into the most significant byte.
+    fn read_le_i24_4(&mut self) -> io::Result<i32>;
+
     /// Reads three bytes and interprets them as a little-endian 24-bit unsigned integer.
     ///
     /// The most significant byte will be 0.
@@ -147,6 +152,19 @@ impl<R> ReadExt for R
             // most significant byte.
             if x & (1 << 23) == 0 {
                 x as i32
+            } else {
+                (x | 0xff_00_00_00) as i32
+            }
+        )
+    }
+
+    #[inline(always)]
+    fn read_le_i24_4(&mut self) -> io::Result<i32> {
+        self.read_le_u32().map(|x|
+            // Test the sign bit, if it is set, extend the sign bit into the
+            // most significant byte. Otherwise, mask out the top byte.
+            if x & (1 << 23) == 0 {
+                (x & 0x00_ff_ff_ff) as i32
             } else {
                 (x | 0xff_00_00_00) as i32
             }
