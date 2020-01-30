@@ -493,10 +493,16 @@ impl<R: io::Read> ChunksReader<R> {
             return Err(Error::FormatError("file contains zero channels"));
         }
 
-        // Two of the stored fields are redundant, and may be ignored. We do
-        // validate them to fail early for ill-formed files.
-        if (Some(bits_per_sample) != (block_align / n_channels).checked_mul(8)) ||
-           (Some(n_bytes_per_sec) != (block_align as u32).checked_mul(n_samples_per_sec)) {
+        let bytes_per_sample = block_align / n_channels;
+        // We allow bits_per_sample to be less than bytes_per_sample so that
+        // we can support things such as 24 bit samples in 4 byte containers.
+        if Some(bits_per_sample) > bytes_per_sample.checked_mul(8) {
+            return Err(Error::FormatError("sample bits exceeds size of sample"));
+        }
+
+        // This field is redundant, and may be ignored. We do validate it to
+        // fail early for ill-formed files.
+        if Some(n_bytes_per_sec) != (block_align as u32).checked_mul(n_samples_per_sec) {
             return Err(Error::FormatError("inconsistent fmt chunk"));
         }
 
@@ -510,7 +516,7 @@ impl<R: io::Read> ChunksReader<R> {
             return Err(Error::FormatError("bits per sample is 0"));
         }
 
-        let spec = WavSpec {
+        let mut spec = WavSpec {
             channels: n_channels,
             sample_rate: n_samples_per_sec,
             bits_per_sample: bits_per_sample,
@@ -525,16 +531,22 @@ impl<R: io::Read> ChunksReader<R> {
         const ADPCM: u16 = 0x0002;
         const IEEE_FLOAT: u16 = 0x0003;
         const EXTENSIBLE: u16 = 0xfffe;
+        // We may update our WavSpec based on more data we read from the header.
         match format_tag {
-            PCM => self.read_wave_format_pcm(chunk_len, spec),
-            ADPCM => Err(Error::Unsupported),
-            IEEE_FLOAT => self.read_wave_format_ieee_float(chunk_len, spec),
-            EXTENSIBLE => self.read_wave_format_extensible(chunk_len, spec),
-            _ => Err(Error::Unsupported),
-        }
+            PCM => try!(self.read_wave_format_pcm(chunk_len, &spec)),
+            ADPCM => return Err(Error::Unsupported),
+            IEEE_FLOAT => try!(self.read_wave_format_ieee_float(chunk_len, &mut spec)),
+            EXTENSIBLE => try!(self.read_wave_format_extensible(chunk_len, &mut spec)),
+            _ => return Err(Error::Unsupported),
+        };
+
+        Ok(WavSpecEx {
+            spec: spec,
+            bytes_per_sample: bytes_per_sample,
+        })
     }
 
-    fn read_wave_format_pcm(&mut self, chunk_len: u32, spec: WavSpec) -> Result<WavSpecEx> {
+    fn read_wave_format_pcm(&mut self, chunk_len: u32, spec: &WavSpec) -> Result<()> {
         // When there is a PCMWAVEFORMAT struct, the chunk is 16 bytes long.
         // The WAVEFORMATEX structs includes two extra bytes, `cbSize`.
         let is_wave_format_ex = match chunk_len {
@@ -571,16 +583,10 @@ impl<R: io::Read> ChunksReader<R> {
         if chunk_len == 40 {
             try!(self.reader.skip_bytes(22));
         }
-
-        let spec_ex = WavSpecEx {
-            spec: spec,
-            bytes_per_sample: spec.bits_per_sample / 8,
-        };
-        Ok(spec_ex)
+        Ok(())
     }
 
-    fn read_wave_format_ieee_float(&mut self, chunk_len: u32, spec: WavSpec)
-                                   -> Result<WavSpecEx> {
+    fn read_wave_format_ieee_float(&mut self, chunk_len: u32, spec: &mut WavSpec) -> Result<()> {
         // When there is a PCMWAVEFORMAT struct, the chunk is 16 bytes long.
         // The WAVEFORMATEX structs includes two extra bytes, `cbSize`.
         let is_wave_format_ex = chunk_len == 18;
@@ -608,18 +614,11 @@ impl<R: io::Read> ChunksReader<R> {
             return Err(Error::FormatError("bits per sample is not 32"));
         }
 
-        let spec_ex = WavSpecEx {
-            spec: WavSpec {
-                sample_format: SampleFormat::Float,
-                ..spec
-            },
-            bytes_per_sample: spec.bits_per_sample / 8,
-        };
-        Ok(spec_ex)
+        spec.sample_format = SampleFormat::Float;
+        Ok(())
     }
 
-    fn read_wave_format_extensible(&mut self, chunk_len: u32, spec: WavSpec)
-                                   -> Result<WavSpecEx> {
+    fn read_wave_format_extensible(&mut self, chunk_len: u32, spec: &mut WavSpec) -> Result<()> {
         // 16 bytes were read already, there must be two more for the `cbSize`
         // field, and `cbSize` itself must be at least 22, so the chunk length
         // must be at least 40.
@@ -665,15 +664,9 @@ impl<R: io::Read> ChunksReader<R> {
             _ => return Err(Error::Unsupported),
         };
 
-        let spec_ex = WavSpecEx {
-            spec: WavSpec {
-                bits_per_sample: valid_bits_per_sample,
-                sample_format: sample_format,
-                ..spec
-            },
-            bytes_per_sample: spec.bits_per_sample / 8,
-        };
-        Ok(spec_ex)
+        spec.bits_per_sample = valid_bits_per_sample;
+        spec.sample_format = sample_format;
+        Ok(())
     }
 
     /// Unwrap the raw Reader from this Chunkreader
