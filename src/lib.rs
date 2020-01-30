@@ -256,6 +256,7 @@ impl Sample for i32 {
             (1, 8) => Ok(try!(reader.read_u8().map(signed_from_u8).map(|x| x as i32))),
             (2, 16) => Ok(try!(reader.read_le_i16().map(|x| x as i32))),
             (3, 24) => Ok(try!(reader.read_le_i24())),
+            (4, 24) => Ok(try!(reader.read_le_i24_4())),
             (4, 32) => Ok(try!(reader.read_le_i32())),
             (n, _) if n > 4 => Err(Error::TooWide),
             // TODO: add a generic decoder for any bit depth.
