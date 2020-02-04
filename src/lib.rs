@@ -83,6 +83,10 @@ pub trait Sample: Sized {
     /// Writes the audio sample to the WAVE data chunk.
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()>;
 
+    /// Writes the audio sample to the WAVE data chunk, zero padding the size of
+    /// the written sample out to `byte_width`.
+    fn write_padded<W: io::Write>(self, writer: &mut W, bits: u16, byte_width: u16) -> Result<()>;
+
     /// Reads the audio sample from the WAVE data chunk.
     fn read<R: io::Read>(reader: &mut R, SampleFormat, bytes: u16, bits: u16) -> Result<Self>;
 
@@ -178,11 +182,16 @@ fn verify_narrow_to_i24() {
 
 impl Sample for i8 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
-        match bits {
-            8 => Ok(try!(writer.write_u8(u8_from_signed(self)))),
-            16 => Ok(try!(writer.write_le_i16(self as i16))),
-            24 => Ok(try!(writer.write_le_i24(self as i32))),
-            32 => Ok(try!(writer.write_le_i32(self as i32))),
+        self.write_padded(writer, bits, bits / 8)
+    }
+
+    fn write_padded<W: io::Write>(self, writer: &mut W, bits: u16, byte_width: u16) -> Result<()> {
+        match (bits, byte_width) {
+            (8, 1) => Ok(try!(writer.write_u8(u8_from_signed(self)))),
+            (16, 2) => Ok(try!(writer.write_le_i16(self as i16))),
+            (24, 3) => Ok(try!(writer.write_le_i24(self as i32))),
+            (24, 4) => Ok(try!(writer.write_le_i24_4(self as i32))),
+            (32, 4) => Ok(try!(writer.write_le_i32(self as i32))),
             _ => Err(Error::Unsupported),
         }
     }
@@ -207,11 +216,18 @@ impl Sample for i8 {
 
 impl Sample for i16 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
-        match bits {
-            8 => Ok(try!(writer.write_u8(u8_from_signed(try!(narrow_to_i8(self as i32)))))),
-            16 => Ok(try!(writer.write_le_i16(self))),
-            24 => Ok(try!(writer.write_le_i24(self as i32))),
-            32 => Ok(try!(writer.write_le_i32(self as i32))),
+        self.write_padded(writer, bits, bits / 8)
+    }
+
+    fn write_padded<W: io::Write>(self, writer: &mut W, bits: u16, byte_width: u16) -> Result<()> {
+        match (bits, byte_width) {
+            (8, 1) => Ok(try!(
+                writer.write_u8(u8_from_signed(try!(narrow_to_i8(self as i32))))
+            )),
+            (16, 2) => Ok(try!(writer.write_le_i16(self))),
+            (24, 3) => Ok(try!(writer.write_le_i24(self as i32))),
+            (24, 4) => Ok(try!(writer.write_le_i24_4(self as i32))),
+            (32, 4) => Ok(try!(writer.write_le_i32(self as i32))),
             _ => Err(Error::Unsupported),
         }
     }
@@ -237,11 +253,18 @@ impl Sample for i16 {
 
 impl Sample for i32 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
-        match bits {
-            8 => Ok(try!(writer.write_u8(u8_from_signed(try!(narrow_to_i8(self)))))),
-            16 => Ok(try!(writer.write_le_i16(try!(narrow_to_i16(self))))),
-            24 => Ok(try!(writer.write_le_i24(try!(narrow_to_i24(self))))),
-            32 => Ok(try!(writer.write_le_i32(self))),
+        self.write_padded(writer, bits, bits / 8)
+    }
+
+    fn write_padded<W: io::Write>(self, writer: &mut W, bits: u16, byte_width: u16) -> Result<()> {
+        match (bits, byte_width) {
+            (8, 1) => Ok(try!(
+                writer.write_u8(u8_from_signed(try!(narrow_to_i8(self))))
+            )),
+            (16, 2) => Ok(try!(writer.write_le_i16(try!(narrow_to_i16(self))))),
+            (24, 3) => Ok(try!(writer.write_le_i24(try!(narrow_to_i24(self))))),
+            (24, 4) => Ok(try!(writer.write_le_i24_4(try!(narrow_to_i24(self))))),
+            (32, 4) => Ok(try!(writer.write_le_i32(self))),
             _ => Err(Error::Unsupported),
         }
     }
@@ -270,8 +293,12 @@ impl Sample for i32 {
 
 impl Sample for f32 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
-        match bits {
-            32 => Ok(try!(writer.write_le_f32(self))),
+        self.write_padded(writer, bits, bits / 8)
+    }
+
+    fn write_padded<W: io::Write>(self, writer: &mut W, bits: u16, byte_width: u16) -> Result<()> {
+        match (bits, byte_width) {
+            (32, 4) => Ok(try!(writer.write_le_f32(self))),
             _ => Err(Error::Unsupported),
         }
     }
