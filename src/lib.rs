@@ -936,12 +936,16 @@ fn read_non_standard_chunks() {
 #[test]
 fn write_read_chunks_is_lossless() {
     use std::io::{ Read, Write };
+    use read::WavSpecEx;
 
-    let write_spec = WavSpec {
-        channels: 2,
-        sample_rate: 44100,
-        bits_per_sample: 16,
-        sample_format: SampleFormat::Int,
+    let write_spec = WavSpecEx {
+        spec: WavSpec {
+            channels: 2,
+            sample_rate: 44100,
+            bits_per_sample: 16,
+            sample_format: SampleFormat::Int,
+        },
+        bytes_per_sample: 2,
     };
     for len in 0..5 {
         let vec = Vec::new();
