@@ -136,13 +136,13 @@ fn verify_channel_mask() {
 
 /// A writer that accepts samples and writes the WAVE format.
 ///
-/// The writer needs a `WavSpec` that describes the audio properties. Then
-/// samples can be written with `write_sample`. Channel data is interleaved.
-/// The number of samples written must be a multiple of the number of channels.
-/// After all samples have been written, the file must be finalized. This can
-/// be done by calling `finalize`. If `finalize` is not called, the file will
-/// be finalized upon drop. However, finalization may fail, and without calling
-/// `finalize`, such a failure cannot be observed.
+/// The writer needs a `WavSpec` or `WavSpecEx` that describes the audio
+/// properties. Then samples can be written with `write_sample`. Channel data is
+/// interleaved. The number of samples written must be a multiple of the number
+/// of channels. After all samples have been written, the file must be
+/// finalized. This can be done by calling `finalize`. If `finalize` is not
+/// called, the file will be finalized upon drop. However, finalization may
+/// fail, and without calling `finalize`, such a failure cannot be observed.
 pub struct WavWriter<W>
     where W: io::Write + io::Seek
 {
@@ -193,6 +193,26 @@ impl<W> WavWriter<W>
     /// This writes parts of the header immediately, hence a `Result` is
     /// returned.
     pub fn new(writer: W, spec: WavSpec) -> Result<WavWriter<W>> {
+        let spec_ex = WavSpecEx {
+            spec: spec,
+            bytes_per_sample: (spec.bits_per_sample + 7) / 8,
+        };
+        WavWriter::new_with_spec_ex(writer, spec_ex)
+    }
+
+
+    /// Creates a writer that writes the WAVE format to the underlying writer.
+    ///
+    /// The underlying writer is assumed to be at offset 0. `WavWriter` employs
+    /// *no* buffering internally. It is recommended to wrap the writer in a
+    /// `BufWriter` to avoid too many `write` calls. The `create()` constructor
+    /// does this automatically.
+    ///
+    /// This writes parts of the header immediately, hence a `Result` is
+    /// returned.
+    pub fn new_with_spec_ex(writer: W, spec_ex: WavSpecEx) -> Result<WavWriter<W>> {
+        let spec = spec_ex.spec;
+
         // Write the older PCMWAVEFORMAT structure if possible, because it is
         // more widely supported. For more than two channels or more than 16
         // bits per sample, the newer WAVEFORMATEXTENSIBLE is required. See also
@@ -205,7 +225,7 @@ impl<W> WavWriter<W>
 
         let mut writer = WavWriter {
             spec: spec,
-            bytes_per_sample: (spec.bits_per_sample + 7) / 8,
+            bytes_per_sample: spec_ex.bytes_per_sample,
             writer: writer,
             data_bytes_written: 0,
             sample_writer_buffer: Vec::new(),
@@ -846,4 +866,36 @@ fn wide_write_should_signal_error() {
         assert!(writer.write_sample(8_388_607_i32).is_ok());
         assert!(writer.write_sample(8_388_608_i32).is_err());
     }
+}
+
+#[test]
+fn s24_wav_write() {
+    use std::fs::File;
+    use std::io::Read;
+    let mut buffer = io::Cursor::new(Vec::new());
+
+    let spec = WavSpecEx {
+        spec: WavSpec {
+            channels: 2,
+            sample_rate: 48000,
+            bits_per_sample: 24,
+            sample_format: SampleFormat::Int,
+        },
+        bytes_per_sample: 4,
+    };
+    {
+        let mut writer = WavWriter::new_with_spec_ex(&mut buffer, spec).unwrap();
+        assert!(writer.write_sample(-96_i32).is_ok());
+        assert!(writer.write_sample(23_052_i32).is_ok());
+        assert!(writer.write_sample(8_388_607_i32).is_ok());
+        assert!(writer.write_sample(-8_360_672_i32).is_ok());
+    }
+
+    let mut expected = Vec::new();
+    File::open("testsamples/waveformatextensible-24bit-4byte-48kHz-stereo.wav")
+        .unwrap()
+        .read_to_end(&mut expected)
+        .unwrap();
+
+    assert_eq!(buffer.into_inner(), expected);
 }
