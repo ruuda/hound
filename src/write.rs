@@ -37,6 +37,11 @@ pub trait WriteExt: io::Write {
     /// The most significant byte of the `i32` is ignored.
     fn write_le_i24(&mut self, x: i32) -> io::Result<()>;
 
+    /// Writes a signed 24-bit integer in 4-byte little endian format.
+    ///
+    /// The most significant byte of the `i32` is replaced with zeroes.
+    fn write_le_i24_4(&mut self, x: i32) -> io::Result<()>;
+
     /// Writes an unsigned 24-bit integer in little endian format.
     ///
     /// The most significant byte of the `u32` is ignored.
@@ -77,6 +82,11 @@ impl<W> WriteExt for W
     #[inline(always)]
     fn write_le_i24(&mut self, x: i32) -> io::Result<()> {
         self.write_le_u24(x as u32)
+    }
+
+    #[inline(always)]
+    fn write_le_i24_4(&mut self, x: i32) -> io::Result<()> {
+        self.write_le_u32((x as u32) & 0x00_ff_ff_ff)
     }
 
     #[inline(always)]
@@ -383,7 +393,11 @@ impl<W> WavWriter<W>
     /// sample does not fit in the number of bits specified in the `WavSpec`.
     #[inline]
     pub fn write_sample<S: Sample>(&mut self, sample: S) -> Result<()> {
-        try!(sample.write(&mut self.writer, self.spec.bits_per_sample));
+        try!(sample.write_padded(
+            &mut self.writer,
+            self.spec.bits_per_sample,
+            self.bytes_per_sample,
+        ));
         self.data_bytes_written += self.bytes_per_sample as u32;
         Ok(())
     }
