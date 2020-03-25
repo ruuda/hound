@@ -647,7 +647,7 @@ impl<R> WavReader<R>
 
     /// Returns an iterator over all samples.
     ///
-    /// The channel data is is interleaved. The iterator is streaming. That is,
+    /// The channel data is interleaved. The iterator is streaming. That is,
     /// if you call this method once, read a few samples, and call this method
     /// again, the second iterator will not start again from the beginning of
     /// the file, it will continue where the first iterator stopped.
