@@ -62,10 +62,32 @@ Features
 | Encoding        | Integer PCM, IEEE Float                                 | Integer PCM, IEEE Float                 |
 | Bits per sample | 8, 16, 24, 32 (integer), 32 (float)                     | 8, 16, 24, 32 (integer), 32 (float)     |
 
+Status
+------
+This project is mature and maintained, but only in little spare time. Generally
+only the latest major version receives fixes, but fixes are sometimes backported
+on a case-by-case basis.
+
+Minimum supported Rust version
+------------------------------
+
+ * Hound supports at a minimum the Rust versions younger than 3 years at the
+   time of a Hound release. For example, a release on 2020-06-03 would support
+   Rust 1.18.0, released on 2017-06-08, but it might not support Rust 1.17.0,
+   released on 2017-04-27.
+ * Compatibility is always stated in the changelog.
+ * Hound tests on CI against the oldest supported version and the current stable
+   Rust version, but not every individual version in between.
+
 Contributing
 ------------
 Contributions in the form of bug reports, feature requests, or pull requests are
 welcome. See [contributing.md](contributing.md).
+
+Security
+--------
+If you wish to disclose an issue privately, you can [reach out by email][contact].
+Usually you can expect a resonse within a few days.
 
 License
 -------
@@ -76,13 +98,14 @@ use Hound in your GPLv2-licensed software, you can add an [exception][exception]
 to your copyright notice. Please do not open an issue if you disagree with the
 choice of license.
 
+[apache2]:       https://www.apache.org/licenses/LICENSE-2.0
+[changelog-img]: https://img.shields.io/badge/changelog-online-blue.svg
 [ci-img]:        https://travis-ci.org/ruuda/hound.svg?branch=master
 [ci]:            https://travis-ci.org/ruuda/hound
+[claxon]:        https://github.com/ruuda/claxon
+[contact]:       https://ruuda.nl/contact
 [crate-img]:     https://img.shields.io/crates/v/hound.svg
 [crate]:         https://crates.io/crates/hound
-[changelog-img]: https://img.shields.io/badge/changelog-online-blue.svg
 [docs-img]:      https://img.shields.io/badge/docs-online-blue.svg
 [docs]:          https://docs.rs/hound
-[claxon]:        https://github.com/ruuda/claxon
-[apache2]:       https://www.apache.org/licenses/LICENSE-2.0
 [exception]:     https://www.gnu.org/licenses/gpl-faq.html#GPLIncompatibleLibs
