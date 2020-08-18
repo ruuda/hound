@@ -598,7 +598,7 @@ pub struct WavWriter<W>
     where W: io::Write + io::Seek
 {
     /// The writer that will be written to.
-    writer: ChunksWriter<W>,
+    pub writer: ChunksWriter<W>,
 }
 
 impl<W> WavWriter<W>
