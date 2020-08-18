@@ -65,7 +65,7 @@ use write::WriteExt;
 mod read;
 mod write;
 
-pub use read::{WavReader, WavIntoSamples, WavSamples, read_wave_header};
+pub use read::{WavReader, WavIntoSamples, WavSamples, read_wave_header, WavSpecEx};
 pub use write::{SampleWriter16, WavWriter};
 
 pub use read::{ Chunk, ChunksReader };
