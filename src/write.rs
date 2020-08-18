@@ -223,13 +223,13 @@ impl ChunkWritingState {
 /// For simple out-of-the-box wav usage, prefer the `WavWriter` facade.
 pub struct ChunksWriter<W: io::Write + io::Seek> {
     /// underlying writer
-    writer: W,
+    pub writer: W,
     /// wave spec, if known at that point
     pub spec_ex: Option<WavSpecEx>,
     /// state of the data chunk, if currently writing it
     pub data_state: Option<ChunkWritingState>,
-    dirty: bool,
-    sample_writer_buffer: Vec<u8>,
+    pub dirty: bool,
+    pub sample_writer_buffer: Vec<u8>,
 }
 
 impl<W: io::Write + io::Seek> ChunksWriter<W> {
