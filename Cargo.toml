@@ -11,6 +11,7 @@ readme = "readme.md"
 homepage = "https://github.com/ruuda/hound"
 repository = "https://github.com/ruuda/hound"
 documentation = "https://docs.rs/hound"
+edition = "2018"
 
 [badges]
 travis-ci = { repository = "ruuda/hound", branch = "v3.4.0" }
