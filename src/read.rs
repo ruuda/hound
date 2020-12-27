@@ -736,6 +736,7 @@ impl<R: io::Read> ChunksReader<R> {
             max_shortterm_loudness = Some(try!(self.reader.read_le_i16()) as f32 / 100.0);
         }
 
+        // Skip 180 bytes of reserve and coding_history
         match version {
             0 => if chunk_len > 347 { try!(self.reader.skip_bytes((chunk_len - 347) as usize)); }
             1 => if chunk_len > 411 { try!(self.reader.skip_bytes((chunk_len - 411) as usize)); }
@@ -757,7 +758,6 @@ impl<R: io::Read> ChunksReader<R> {
             max_true_peak,
             max_momentary_loudness,
             max_shortterm_loudness,
-            coding_history: String::new(),
         })
     }
 
@@ -845,9 +845,9 @@ pub struct BwavExtMeta {
 
     // << 180 bytes reserved for extension >>
 
-    // ASCII : History Coding
-    // Terminated by CR/LF
-    pub coding_history: String,
+    // ASCII : History Coding, terminated by CR/LF
+    // More information https://tech.ebu.ch/docs/r/r098.pdf
+    // pub coding_history: String,
 }
 
 /// A reader that reads the WAVE format from the underlying reader.
