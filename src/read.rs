@@ -939,6 +939,11 @@ impl<R> WavReader<R>
             .spec
     }
 
+    /// Returns a reference to the Broadcast Extension Metadata, if present.
+    pub fn bext(&self) -> Option<&BwavExtMeta> {
+        self.reader.bext.as_ref()
+    }
+
     /// Returns an iterator over all samples.
     ///
     /// The channel data is is interleaved. The iterator is streaming. That is,
@@ -1406,6 +1411,59 @@ fn read_wav_nonstandard_01() {
                                       .collect();
 
     assert_eq!(&samples[..], &[0, 0]);
+}
+
+#[test]
+fn read_pro_tools_bext() {
+    let bext = WavReader::open("testsamples/pro_tools_bext.wav")
+        .unwrap()
+        .bext()
+        .cloned()
+        .expect("test file has bext");
+
+    assert_eq!(bext.originator, "Pro Tools");
+    assert_eq!(bext.originator_date, "2020-12-21");
+    assert_eq!(bext.originator_time, "20:22:14");
+    assert_eq!(bext.time_reference, 2882880);
+    assert_eq!(bext.version, 1);
+}
+
+#[test]
+fn read_reaper_bext() {
+    let bext = WavReader::open("testsamples/reaper_bext.wav")
+        .unwrap()
+        .bext()
+        .cloned()
+        .expect("test file has bext");
+
+    assert_eq!(bext.originator, "REAPER");
+    assert_eq!(bext.originator_date, "2020-12-21");
+    assert_eq!(bext.originator_time, "21-07-45");
+    assert_eq!(bext.time_reference, 2645927);
+    assert_eq!(bext.version, 1);
+}
+
+#[test]
+fn read_wav_agent_bext() {
+    // WavAgent may not place the bext chunk before the data chunk,
+    // so WavReader will not have it set yet.
+    let wav_reader = WavReader::open("testsamples/wav_agent_bext.wav")
+        .unwrap();
+    assert!(wav_reader.bext().is_none());
+
+    // But we can still retrieve it with ChunksReader
+    let mut chunks_reader = wav_reader.reader;
+    let mut bext = None;
+    while let Some(chunk) = chunks_reader.next().unwrap() {
+        if let Chunk::Bext(b) = chunk {
+            bext = Some(b);
+        }
+    }
+    assert!(bext.is_some());
+    let bext = bext.unwrap();
+    assert_eq!(bext.originator, "Sound Dev: WA20 S#349161314873");
+    assert_eq!(bext.time_reference, 3137939205);
+    assert_eq!(bext.version, 0);
 }
 
 #[test]
