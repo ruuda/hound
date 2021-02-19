@@ -796,6 +796,7 @@ fn new_append_does_not_corrupt_files() {
         "testsamples/waveformatextensible-24bit-192kHz-mono.wav",
         "testsamples/waveformatextensible-32bit-48kHz-stereo.wav",
         "testsamples/nonstandard-01.wav",
+        "testsamples/nonstandard-02.wav",
         "testsamples/waveformatex-8bit-11025Hz-mono.wav",
     ];
 
