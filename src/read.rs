@@ -664,7 +664,11 @@ impl<R: io::Read> ChunksReader<R> {
             _ => return Err(Error::Unsupported),
         };
 
-        spec.bits_per_sample = valid_bits_per_sample;
+        // Fallback to bits_per_sample if the valid_bits_per_sample is obviously wrong to support non standard headers found in the wild.
+        if valid_bits_per_sample > 0 {
+            spec.bits_per_sample = valid_bits_per_sample;
+        }
+
         spec.sample_format = sample_format;
         Ok(())
     }
