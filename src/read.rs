@@ -857,6 +857,24 @@ fn read_wav_skips_unknown_chunks() {
 }
 
 #[test]
+fn read_wav_0_valid_bits_fallback() {
+    let mut wav_reader = WavReader::open("testsamples/nonstandard-02.wav")
+        .unwrap();
+
+    assert_eq!(wav_reader.spec().channels, 2);
+    assert_eq!(wav_reader.spec().sample_rate, 48000);
+    assert_eq!(wav_reader.spec().bits_per_sample, 32);
+    assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
+
+    let samples: Vec<i32> = wav_reader.samples()
+        .map(|r| r.unwrap())
+        .collect();
+
+    // The test file has been prepared with these exact four samples.
+    assert_eq!(&samples[..], &[19, -229373, 33587161, -2147483497]);
+}
+
+#[test]
 fn len_and_size_hint_are_correct() {
     let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav")
         .unwrap();
