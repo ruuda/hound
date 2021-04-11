@@ -664,7 +664,11 @@ impl<R: io::Read> ChunksReader<R> {
             _ => return Err(Error::Unsupported),
         };
 
-        spec.bits_per_sample = valid_bits_per_sample;
+        // Fallback to bits_per_sample if the valid_bits_per_sample is obviously wrong to support non standard headers found in the wild.
+        if valid_bits_per_sample > 0 {
+            spec.bits_per_sample = valid_bits_per_sample;
+        }
+
         spec.sample_format = sample_format;
         Ok(())
     }
@@ -1000,6 +1004,24 @@ fn read_wav_skips_unknown_chunks() {
         let sample = wav_reader.samples::<i16>().next().unwrap().unwrap();
         assert_eq!(sample, 2);
     }
+}
+
+#[test]
+fn read_wav_0_valid_bits_fallback() {
+    let mut wav_reader = WavReader::open("testsamples/nonstandard-02.wav")
+        .unwrap();
+
+    assert_eq!(wav_reader.spec().channels, 2);
+    assert_eq!(wav_reader.spec().sample_rate, 48000);
+    assert_eq!(wav_reader.spec().bits_per_sample, 32);
+    assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
+
+    let samples: Vec<i32> = wav_reader.samples()
+        .map(|r| r.unwrap())
+        .collect();
+
+    // The test file has been prepared with these exact four samples.
+    assert_eq!(&samples[..], &[19, -229373, 33587161, -2147483497]);
 }
 
 #[test]
