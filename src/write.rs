@@ -127,8 +127,9 @@ impl<W> WriteExt for W
 /// extra channels are not assigned to any physical speaker location.  In this scenario, this
 /// function will return a filled channel mask.
 fn channel_mask(channels: u16) -> u32 {
-    // clamp to 0-18 to stay within reserved bits
-    (0..channels.clamp(0, 18) as u32).map(|c| 1 << c).fold(0, |a, c| a | c)
+    // Clamp to 0-18 to stay within reserved bits.
+    let channels = if channels > 18 { 18 } else { channels };
+    (0..channels as u32).map(|c| 1 << c).fold(0, |a, c| a | c)
 }
 
 #[test]
