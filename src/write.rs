@@ -121,8 +121,14 @@ impl<W> WriteExt for W
 }
 
 /// Generates a bitmask with `channels` ones in the least significant bits.
+///
+/// According to the [spec](https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ksmedia/ns-ksmedia-waveformatextensible#remarks),
+/// if `channels` is greater than the number of bits in the channel mask, 18 non-reserved bits,
+/// extra channels are not assigned to any physical speaker location.  In this scenario, this
+/// function will return a filled channel mask.
 fn channel_mask(channels: u16) -> u32 {
-    (0..channels).map(|c| 1 << c).fold(0, |a, c| a | c)
+    // clamp to 0-18 to stay within reserved bits
+    (0..channels.clamp(0, 18) as u32).map(|c| 1 << c).fold(0, |a, c| a | c)
 }
 
 #[test]
@@ -131,7 +137,14 @@ fn verify_channel_mask() {
     assert_eq!(channel_mask(1), 1);
     assert_eq!(channel_mask(2), 3);
     assert_eq!(channel_mask(3), 7);
-    assert_eq!(channel_mask(4), 15);
+    assert_eq!(channel_mask(4), 0xF);
+    assert_eq!(channel_mask(8), 0xFF);
+    assert_eq!(channel_mask(16), 0xFFFF);
+    // expect channels >= 18 to yield the same mask
+    assert_eq!(channel_mask(18), 0x3FFFF);
+    assert_eq!(channel_mask(32), 0x3FFFF);
+    assert_eq!(channel_mask(64), 0x3FFFF);
+    assert_eq!(channel_mask(129), 0x3FFFF);
 }
 
 /// A writer that accepts samples and writes the WAVE format.
