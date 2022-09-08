@@ -68,6 +68,9 @@ pub trait ReadExt: io::Read {
     /// Reads four bytes and interprets them as a little-endian 32-bit unsigned integer.
     fn read_le_u32(&mut self) -> io::Result<u32>;
 
+    /// Reads eight bytes and interprets them as a little-endian 64-bit unsigned integer.
+    fn read_le_u64(&mut self) -> io::Result<u64>;
+
     /// Reads four bytes and interprets them as a little-endian 32-bit IEEE float.
     fn read_le_f32(&mut self) -> io::Result<f32>;
 }
@@ -192,6 +195,16 @@ impl<R> ReadExt for R
     }
 
     #[inline(always)]
+    fn read_le_u64(&mut self) -> io::Result<u64> {
+        let mut buf = [0u8; 8];
+        try!(self.read_into(&mut buf));
+        Ok((buf[7] as u64) << 56 | (buf[6] as u64) << 48 |
+           (buf[5] as u64) << 40 | (buf[4] as u64) << 32 |
+           (buf[3] as u64) << 24 | (buf[2] as u64) << 16 |
+           (buf[1] as u64) << 8  | (buf[0] as u64) << 0)
+    }
+
+    #[inline(always)]
     fn read_le_f32(&mut self) -> io::Result<f32> {
         self.read_le_u32().map(|u| unsafe { mem::transmute(u) })
     }
@@ -274,6 +287,8 @@ pub enum Chunk<'r, R: 'r + io::Read> {
     Fmt(WavSpecEx),
     /// fact chunk, used by non-pcm encoding but redundant
     Fact,
+    /// broadcast extension chunk, parsed into a BwavExtMeta
+    Bext(BwavExtMeta),
     /// data chunk, where the samples are actually stored
     Data,
     /// any other riff chunk
@@ -290,6 +305,8 @@ pub struct ChunksReader<R: io::Read> {
     reader: R,
     /// the Wave format specification, if it has been read already
     pub spec_ex: Option<WavSpecEx>,
+    /// the Broadcast Wave Extension Metadata
+    pub bext: Option<BwavExtMeta>,
     /// when inside the main data state, keeps track of decoding and chunk
     /// boundaries
     pub data_state: Option<DataReadingState>,
@@ -315,6 +332,7 @@ impl<R: io::Read> ChunksReader<R> {
         Ok(ChunksReader {
             reader: reader,
             spec_ex: None,
+            bext: None,
             data_state: None,
         })
     }
@@ -398,6 +416,11 @@ impl<R: io::Read> ChunksReader<R> {
                 // http://www-mmsp.ece.mcgill.ca/documents/audioformats/wave/wave.html
                 let _samples_per_channel = self.reader.read_le_u32();
                 Ok(Some(Chunk::Fact))
+            }
+            b"bext" => {
+                let bext = try!(self.read_bext_chunk(len));
+                self.bext = Some(bext.clone());
+                Ok(Some(Chunk::Bext(bext)))
             }
             b"data" => {
                 if let Some(spec_ex) = self.spec_ex {
@@ -673,6 +696,75 @@ impl<R: io::Read> ChunksReader<R> {
         Ok(())
     }
 
+    fn read_bext_chunk(&mut self, chunk_len: u32) -> Result<BwavExtMeta> {
+        const NULL: char = '\u{0}';
+
+        macro_rules! into_string {
+            ($vec:expr) => {
+                {
+                    let mut string = try!(
+                        String::from_utf8(try!($vec))
+                            .map_err(|_| Error::FormatError("invalid ascii in bext"))
+                    );
+                    string.truncate(string.trim_end_matches(NULL).len());
+                    string
+                }
+            }
+        }
+
+        let description = into_string!(self.reader.read_bytes(256));
+        let originator = into_string!(self.reader.read_bytes(32));
+        let originator_reference = into_string!(self.reader.read_bytes(32));
+        let originator_date = into_string!(self.reader.read_bytes(10));
+        let originator_time = into_string!(self.reader.read_bytes(8));
+
+        let time_reference = try!(self.reader.read_le_u64());
+        let version = try!(self.reader.read_u8());
+
+        let mut umid = [0u8; 64];
+        let mut loudness_value = None;
+        let mut loudness_range = None;
+        let mut max_true_peak = None;
+        let mut max_momentary_loudness = None;
+        let mut max_shortterm_loudness = None;
+        
+        if version > 0 {
+            try!(self.reader.read_into(&mut umid));
+        }
+
+        if version > 1 {
+            loudness_value = Some(try!(self.reader.read_le_i16()) as f32 / 100.0);
+            loudness_range = Some(try!(self.reader.read_le_i16()) as f32 / 100.0);
+            max_true_peak = Some(try!(self.reader.read_le_i16()) as f32 / 100.0);
+            max_momentary_loudness = Some(try!(self.reader.read_le_i16()) as f32 / 100.0);
+            max_shortterm_loudness = Some(try!(self.reader.read_le_i16()) as f32 / 100.0);
+        }
+
+        // Skip 180 bytes of reserve and coding_history
+        match version {
+            0 => if chunk_len > 347 { try!(self.reader.skip_bytes((chunk_len - 347) as usize)); }
+            1 => if chunk_len > 411 { try!(self.reader.skip_bytes((chunk_len - 411) as usize)); }
+            2 => if chunk_len > 421 { try!(self.reader.skip_bytes((chunk_len - 421) as usize)); }
+            _ => {}
+        }
+
+        Ok(BwavExtMeta {
+            description,
+            originator,
+            originator_reference,
+            originator_date,
+            originator_time,
+            time_reference,
+            version,
+            umid,
+            loudness_value,
+            loudness_range,
+            max_true_peak,
+            max_momentary_loudness,
+            max_shortterm_loudness,
+        })
+    }
+
     /// Unwrap the raw Reader from this Chunkreader
     pub fn into_inner(self) -> R {
         self.reader
@@ -717,6 +809,49 @@ pub struct WavSpecEx {
 
     /// The number of bytes used to store a sample.
     pub bytes_per_sample: u16,
+}
+
+/// Definition of a Broadcast Audio Extension Chunk.
+///
+/// https://tech.ebu.ch/docs/tech/tech3285.pdf
+#[derive(Clone, Debug)]
+pub struct BwavExtMeta {
+    // ASCII : <<Description of the sound sequenc>> 256 byes
+    pub description: String,
+    // ASCII : <<Name of the originator>> 32 bytes
+    pub originator: String,
+    // ASCII : <<Reference of the originator>> 32 bytes
+    pub originator_reference: String,
+    // ASCII : <<yyyy-mm-dd>> 10 bytes
+    // The separator may be a '-', '_', ':', ' ', or '.'
+    pub originator_date: String,
+    // ASCII : <<hh:mm:ss>> 8 bytes
+    pub originator_time: String,
+    // The first sample count since midnight
+    // SampleRate is defined in the format chunk
+    pub time_reference: u64,
+    // Version of the BWF
+    pub version: u8,
+    // SMPTE UMID 64 bytes
+    pub umid: [u8; 64],
+    // Integrated loudness in LUFS (multiplied by 100)
+    pub loudness_value: Option<f32>,
+    // Loudness range in LU (multiplied by 100)
+    pub loudness_range: Option<f32>,
+    // Maximum true peak level in dBTP (multiplied by 100)
+    pub max_true_peak: Option<f32>,
+    // Highest value of mementary loudness
+    // level in LUFS (multiplied by 100)
+    pub max_momentary_loudness: Option<f32>,
+    // Highest value of the short-term loudness level
+    // in LUFS (multiplied by 100)
+    pub max_shortterm_loudness: Option<f32>,
+
+    // << 180 bytes reserved for extension >>
+
+    // ASCII : History Coding, terminated by CR/LF
+    // More information https://tech.ebu.ch/docs/r/r098.pdf
+    // pub coding_history: String,
 }
 
 /// A reader that reads the WAVE format from the underlying reader.
@@ -806,6 +941,11 @@ impl<R> WavReader<R>
         self.reader.spec_ex
             .expect("Using a WavReader wrapping a ChunkReader with no spec")
             .spec
+    }
+
+    /// Returns a reference to the Broadcast Extension Metadata, if present.
+    pub fn bext(&self) -> Option<&BwavExtMeta> {
+        self.reader.bext.as_ref()
     }
 
     /// Returns an iterator over all samples.
@@ -1293,6 +1433,59 @@ fn read_wav_nonstandard_01() {
                                       .collect();
 
     assert_eq!(&samples[..], &[0, 0]);
+}
+
+#[test]
+fn read_pro_tools_bext() {
+    let bext = WavReader::open("testsamples/pro_tools_bext.wav")
+        .unwrap()
+        .bext()
+        .cloned()
+        .expect("test file has bext");
+
+    assert_eq!(bext.originator, "Pro Tools");
+    assert_eq!(bext.originator_date, "2020-12-21");
+    assert_eq!(bext.originator_time, "20:22:14");
+    assert_eq!(bext.time_reference, 2882880);
+    assert_eq!(bext.version, 1);
+}
+
+#[test]
+fn read_reaper_bext() {
+    let bext = WavReader::open("testsamples/reaper_bext.wav")
+        .unwrap()
+        .bext()
+        .cloned()
+        .expect("test file has bext");
+
+    assert_eq!(bext.originator, "REAPER");
+    assert_eq!(bext.originator_date, "2020-12-21");
+    assert_eq!(bext.originator_time, "21-07-45");
+    assert_eq!(bext.time_reference, 2645927);
+    assert_eq!(bext.version, 1);
+}
+
+#[test]
+fn read_wav_agent_bext() {
+    // WavAgent may not place the bext chunk before the data chunk,
+    // so WavReader will not have it set yet.
+    let wav_reader = WavReader::open("testsamples/wav_agent_bext.wav")
+        .unwrap();
+    assert!(wav_reader.bext().is_none());
+
+    // But we can still retrieve it with ChunksReader
+    let mut chunks_reader = wav_reader.reader;
+    let mut bext = None;
+    while let Some(chunk) = chunks_reader.next().unwrap() {
+        if let Chunk::Bext(b) = chunk {
+            bext = Some(b);
+        }
+    }
+    assert!(bext.is_some());
+    let bext = bext.unwrap();
+    assert_eq!(bext.originator, "Sound Dev: WA20 S#349161314873");
+    assert_eq!(bext.time_reference, 3137939205);
+    assert_eq!(bext.version, 0);
 }
 
 #[test]

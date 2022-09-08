@@ -68,7 +68,7 @@ mod write;
 pub use read::{WavReader, WavIntoSamples, WavSamples, read_wave_header};
 pub use write::{SampleWriter16, WavWriter};
 
-pub use read::{ Chunk, ChunksReader };
+pub use read::{ Chunk, ChunksReader, BwavExtMeta };
 pub use write::ChunksWriter;
 
 /// A type that can be used to represent audio samples.
@@ -912,17 +912,13 @@ macro_rules! guard {
 #[test]
 fn read_non_standard_chunks() {
     use std::fs;
-    use std::io::Read;
     let mut file = fs::File::open("testsamples/nonstandard-01.wav").unwrap();
     let mut reader = read::ChunksReader::new(&mut file).unwrap();
     guard!(Some(read::Chunk::Unknown(kind, _reader)) = reader.next().unwrap() => {
         assert_eq!(kind, *b"JUNK");
     });
-    guard!(Some(read::Chunk::Unknown(kind, mut reader)) = reader.next().unwrap() => {
-        assert_eq!(kind, *b"bext");
-        let mut v = vec!();
-        reader.read_to_end(&mut v).unwrap();
-        assert!((0..v.len()).any(|offset| &v[offset..offset+9] == b"Pro Tools"));
+    guard!(Some(read::Chunk::Bext(bext)) = reader.next().unwrap() => {
+        assert_eq!(bext.originator, "Pro Tools");
     });
     guard!(Some(read::Chunk::Fmt(_)) = reader.next().unwrap() => { () });
     guard!(Some(read::Chunk::Unknown(kind, _len)) = reader.next().unwrap() => {
