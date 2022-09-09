@@ -45,7 +45,7 @@ dependencies = [
 
 [[package]]
 name = "hound"
-version = "3.4.0"
+version = "3.5.0"
 dependencies = [
  "cpal 0.2.12 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
