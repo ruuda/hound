@@ -4,7 +4,7 @@ Changelog
 3.5.0
 -----
 
-Release date TBD.
+Release date 2022-09-09.
 
 This is a maintenance release that includes most of the bugfixes and features
 that have been contributed since 3.4.0, which could be cherry-picked on top of
