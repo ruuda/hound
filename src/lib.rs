@@ -348,6 +348,19 @@ pub struct WavSpec {
     pub sample_format: SampleFormat,
 }
 
+/// Specifies properties of the audio data, as well as the layout of the stream.
+#[derive(Clone, Copy)]
+pub struct WavSpecEx {
+    /// The normal information about the audio data.
+    ///
+    /// Bits per sample here is the number of _used_ bits per sample, not the
+    /// number of bits used to _store_ a sample.
+    pub spec: WavSpec,
+
+    /// The number of bytes used to store a sample.
+    pub bytes_per_sample: u16,
+}
+
 /// The error type for operations on `WavReader` and `WavWriter`.
 #[derive(Debug)]
 pub enum Error {

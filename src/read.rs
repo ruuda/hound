@@ -16,7 +16,7 @@ use std::io;
 use std::marker;
 use std::mem;
 use std::path;
-use super::{Error, Result, Sample, SampleFormat, WavSpec};
+use super::{Error, Result, Sample, SampleFormat, WavSpec, WavSpecEx};
 
 /// Extends the functionality of `io::Read` with additional methods.
 ///
@@ -209,19 +209,6 @@ enum ChunkKind {
 struct ChunkHeader {
     pub kind: ChunkKind,
     pub len: u32,
-}
-
-/// Specifies properties of the audio data, as well as the layout of the stream.
-#[derive(Clone, Copy)]
-pub struct WavSpecEx {
-    /// The normal information about the audio data.
-    ///
-    /// Bits per sample here is the number of _used_ bits per sample, not the
-    /// number of bits used to _store_ a sample.
-    pub spec: WavSpec,
-
-    /// The number of bytes used to store a sample.
-    pub bytes_per_sample: u16,
 }
 
 /// A reader that reads the WAVE format from the underlying reader.

@@ -15,9 +15,8 @@ use std::io;
 use std::mem;
 use std::io::{Seek, Write};
 use std::path;
-use super::{Error, Result, Sample, SampleFormat, WavSpec};
+use super::{Error, Result, Sample, SampleFormat, WavSpec, WavSpecEx};
 use ::read;
-use ::read::WavSpecEx;
 
 /// Extends the functionality of `io::Write` with additional methods.
 ///
