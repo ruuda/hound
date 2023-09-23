@@ -80,6 +80,10 @@ pub trait Sample: Sized {
     /// Writes the audio sample to the WAVE data chunk.
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()>;
 
+    /// Writes the audio sample to the WAVE data chunk, zero padding the size of
+    /// the written sample out to `byte_width`.
+    fn write_padded<W: io::Write>(self, writer: &mut W, bits: u16, byte_width: u16) -> Result<()>;
+
     /// Reads the audio sample from the WAVE data chunk.
     fn read<R: io::Read>(reader: &mut R, SampleFormat, bytes: u16, bits: u16) -> Result<Self>;
 
@@ -175,11 +179,16 @@ fn verify_narrow_to_i24() {
 
 impl Sample for i8 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
-        match bits {
-            8 => Ok(try!(writer.write_u8(u8_from_signed(self)))),
-            16 => Ok(try!(writer.write_le_i16(self as i16))),
-            24 => Ok(try!(writer.write_le_i24(self as i32))),
-            32 => Ok(try!(writer.write_le_i32(self as i32))),
+        self.write_padded(writer, bits, bits / 8)
+    }
+
+    fn write_padded<W: io::Write>(self, writer: &mut W, bits: u16, byte_width: u16) -> Result<()> {
+        match (bits, byte_width) {
+            (8, 1) => Ok(try!(writer.write_u8(u8_from_signed(self)))),
+            (16, 2) => Ok(try!(writer.write_le_i16(self as i16))),
+            (24, 3) => Ok(try!(writer.write_le_i24(self as i32))),
+            (24, 4) => Ok(try!(writer.write_le_i24_4(self as i32))),
+            (32, 4) => Ok(try!(writer.write_le_i32(self as i32))),
             _ => Err(Error::Unsupported),
         }
     }
@@ -204,11 +213,18 @@ impl Sample for i8 {
 
 impl Sample for i16 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
-        match bits {
-            8 => Ok(try!(writer.write_u8(u8_from_signed(try!(narrow_to_i8(self as i32)))))),
-            16 => Ok(try!(writer.write_le_i16(self))),
-            24 => Ok(try!(writer.write_le_i24(self as i32))),
-            32 => Ok(try!(writer.write_le_i32(self as i32))),
+        self.write_padded(writer, bits, bits / 8)
+    }
+
+    fn write_padded<W: io::Write>(self, writer: &mut W, bits: u16, byte_width: u16) -> Result<()> {
+        match (bits, byte_width) {
+            (8, 1) => Ok(try!(
+                writer.write_u8(u8_from_signed(try!(narrow_to_i8(self as i32))))
+            )),
+            (16, 2) => Ok(try!(writer.write_le_i16(self))),
+            (24, 3) => Ok(try!(writer.write_le_i24(self as i32))),
+            (24, 4) => Ok(try!(writer.write_le_i24_4(self as i32))),
+            (32, 4) => Ok(try!(writer.write_le_i32(self as i32))),
             _ => Err(Error::Unsupported),
         }
     }
@@ -234,11 +250,18 @@ impl Sample for i16 {
 
 impl Sample for i32 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
-        match bits {
-            8 => Ok(try!(writer.write_u8(u8_from_signed(try!(narrow_to_i8(self)))))),
-            16 => Ok(try!(writer.write_le_i16(try!(narrow_to_i16(self))))),
-            24 => Ok(try!(writer.write_le_i24(try!(narrow_to_i24(self))))),
-            32 => Ok(try!(writer.write_le_i32(self))),
+        self.write_padded(writer, bits, bits / 8)
+    }
+
+    fn write_padded<W: io::Write>(self, writer: &mut W, bits: u16, byte_width: u16) -> Result<()> {
+        match (bits, byte_width) {
+            (8, 1) => Ok(try!(
+                writer.write_u8(u8_from_signed(try!(narrow_to_i8(self))))
+            )),
+            (16, 2) => Ok(try!(writer.write_le_i16(try!(narrow_to_i16(self))))),
+            (24, 3) => Ok(try!(writer.write_le_i24(try!(narrow_to_i24(self))))),
+            (24, 4) => Ok(try!(writer.write_le_i24_4(try!(narrow_to_i24(self))))),
+            (32, 4) => Ok(try!(writer.write_le_i32(self))),
             _ => Err(Error::Unsupported),
         }
     }
@@ -256,6 +279,7 @@ impl Sample for i32 {
             (1, 8) => Ok(try!(reader.read_u8().map(signed_from_u8).map(|x| x as i32))),
             (2, 16) => Ok(try!(reader.read_le_i16().map(|x| x as i32))),
             (3, 24) => Ok(try!(reader.read_le_i24())),
+            (4, 24) => Ok(try!(reader.read_le_i24_4())),
             (4, 32) => Ok(try!(reader.read_le_i32())),
             (n, _) if n > 4 => Err(Error::TooWide),
             // TODO: add a generic decoder for any bit depth.
@@ -266,8 +290,12 @@ impl Sample for i32 {
 
 impl Sample for f32 {
     fn write<W: io::Write>(self, writer: &mut W, bits: u16) -> Result<()> {
-        match bits {
-            32 => Ok(try!(writer.write_le_f32(self))),
+        self.write_padded(writer, bits, bits / 8)
+    }
+
+    fn write_padded<W: io::Write>(self, writer: &mut W, bits: u16, byte_width: u16) -> Result<()> {
+        match (bits, byte_width) {
+            (32, 4) => Ok(try!(writer.write_le_f32(self))),
             _ => Err(Error::Unsupported),
         }
     }
@@ -318,6 +346,19 @@ pub struct WavSpec {
 
     /// Whether the wav's samples are float or integer values.
     pub sample_format: SampleFormat,
+}
+
+/// Specifies properties of the audio data, as well as the layout of the stream.
+#[derive(Clone, Copy)]
+pub struct WavSpecEx {
+    /// The normal information about the audio data.
+    ///
+    /// Bits per sample here is the number of _used_ bits per sample, not the
+    /// number of bits used to _store_ a sample.
+    pub spec: WavSpec,
+
+    /// The number of bytes used to store a sample.
+    pub bytes_per_sample: u16,
 }
 
 /// The error type for operations on `WavReader` and `WavWriter`.
@@ -424,6 +465,69 @@ const KSDATAFORMAT_SUBTYPE_PCM: [u8; 16] = [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 
 /// Subformat type for IEEE_FLOAT audio with float samples.
 const KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: [u8; 16] = [0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
                                                    0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71];
+
+
+impl WavSpec {
+    /// Get "stand-alone" wav header representing infinite or unknown size wav file.
+    /// Use this if you need to write audio data to non-seekable sinks (like stdout).
+    ///
+    /// Actual samples are supposed to be written using low-level [`Sample::write`] call.
+    ///
+    /// Such wav files are produced e.g. by FFmpeg and have `0xFFFFFFFF` instead of chunk sizes.
+    ///
+    /// Note that such files may be non-standard. Consider using [`WavWriter`] for better API.
+    ///
+    /// Example:
+    ///
+    /// ```no_run
+    /// extern crate hound;
+    /// use std::io::Write;
+    /// 
+    /// let spec = hound::WavSpec {
+    ///     bits_per_sample: 16,
+    ///     channels: 1,
+    ///     sample_format: hound::SampleFormat::Int,
+    ///     sample_rate: 16000,
+    /// };
+    /// 
+    /// let v = spec.into_header_for_infinite_file();
+    /// 
+    /// let so = std::io::stdout();
+    /// let mut so = so.lock();
+    /// so.write_all(&v[..]).unwrap();
+    /// 
+    /// loop {
+    ///    for i in 0..126 {
+    ///       let x : i16 = (i * 256) as i16;
+    ///       hound::Sample::write(x, &mut so, 16).unwrap();
+    ///    }
+    /// }
+    /// ```
+    pub fn into_header_for_infinite_file(self) -> Vec<u8> {
+        let mut c = std::io::Cursor::new(Vec::with_capacity(0x44));
+        {
+            let w = WavWriter::new(&mut c, self);
+            drop(w);
+        }
+        let mut v = c.into_inner();
+
+        // Set WAVE chunk size to a special signal value
+        v[4] = 0xFF; v[5] = 0xFF; v[6] = 0xFF; v[7] = 0xFF;
+
+        // Detect fmt size, get offset of data chunk's size and set it to signal value
+        if v[16] == 0x10 {
+            // pcm wave
+            v[0x28] = 0xFF; v[0x29] = 0xFF; v[0x2A] = 0xFF; v[0x2B] = 0xFF; 
+        } else if v[16] == 0x28 {
+            // extensible
+            v[0x40] = 0xFF; v[0x41] = 0xFF; v[0x42] = 0xFF; v[0x43] = 0xFF; 
+        } else {
+            unreachable!()
+        }
+
+        v
+    }
+}
 
 #[test]
 fn write_read_i16_is_lossless() {
@@ -705,6 +809,7 @@ fn new_append_does_not_corrupt_files() {
         "testsamples/waveformatextensible-24bit-192kHz-mono.wav",
         "testsamples/waveformatextensible-32bit-48kHz-stereo.wav",
         "testsamples/nonstandard-01.wav",
+        "testsamples/nonstandard-02.wav",
         "testsamples/waveformatex-8bit-11025Hz-mono.wav",
     ];
 
@@ -789,4 +894,32 @@ fn append_works_on_files() {
     assert_eq!(fs::metadata("append.wav").unwrap().len(), len + 4);
 
     assert_contents("append.wav", &[11, 13, 17, 19, 23]);
+}
+
+#[cfg(test)]
+#[test]
+fn test_into_header_for_infinite_file() {
+    let spec = WavSpec {
+        bits_per_sample: 16,
+        channels: 1,
+        sample_format: SampleFormat::Int,
+        sample_rate: 16000,
+    };
+    let v = spec.into_header_for_infinite_file();
+    assert_eq!(&v[..], &b"RIFF\xFF\xFF\xFF\xFFWAVE\
+fmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\x3e\x00\x00\x00\x7d\x00\x00\x02\x00\x10\x00\
+data\xFF\xFF\xFF\xFF"[..]);
+
+    let spec = WavSpec {
+        bits_per_sample: 16,
+        channels: 10,
+        sample_format: SampleFormat::Int,
+        sample_rate: 16000,
+    };
+    let v = spec.into_header_for_infinite_file();
+    assert_eq!(&v[..], &b"RIFF\xFF\xFF\xFF\xFFWAVE\
+fmt \x28\x00\x00\x00\xfe\xff\x0a\x00\x80\x3e\x00\x00\x00\xe2\x04\x00\
+\x14\x00\x10\x00\x16\x00\x10\x00\xff\x03\x00\x00\x01\x00\x00\x00\
+\x00\x00\x10\x00\x80\x00\x00\xaa\x00\x38\x9b\x71\
+data\xFF\xFF\xFF\xFF"[..]);
 }

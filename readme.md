@@ -2,7 +2,6 @@ Hound
 =====
 A wav encoding and decoding library in Rust.
 
-[![Build Status][ci-img]][ci]
 [![Crates.io version][crate-img]][crate]
 [![Changelog][changelog-img]](changelog.md)
 [![Documentation][docs-img]][docs]
@@ -76,8 +75,6 @@ use Hound in your GPLv2-licensed software, you can add an [exception][exception]
 to your copyright notice. Please do not open an issue if you disagree with the
 choice of license.
 
-[ci-img]:        https://travis-ci.org/ruuda/hound.svg?branch=master
-[ci]:            https://travis-ci.org/ruuda/hound
 [crate-img]:     https://img.shields.io/crates/v/hound.svg
 [crate]:         https://crates.io/crates/hound
 [changelog-img]: https://img.shields.io/badge/changelog-online-blue.svg

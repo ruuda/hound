@@ -1,6 +1,51 @@
 Changelog
 =========
 
+3.5.0
+-----
+
+Released 2022-09-09.
+
+This is a maintenance release that includes most of the bugfixes and features
+that have been contributed since 3.4.0, which could be cherry-picked on top of
+3.4.0. Some other contributions with more far-reaching changes remain unreleased
+as of yet.
+
+**Compatibility**:
+
+ * Ensures compatibility with Rust 1.16 through 1.63 stable. Previously the
+   minimum supported Rust version was 1.4. Cargo from 1.4 is no longer
+   compatible with the current crates.io registry, and Rustup fails signature
+   verification for these binaries, so it is infeasible to continue to support
+   it.
+
+New features:
+
+ * Add support for `S24_LE` files, which store 24 bits in 4 bytes ([#40][40],
+   [#41][41])
+ * Add `WavWriter::new_with_spec_ex` ([#42][42])
+ * Add `WavSpec::into_header_for_infinite_file` ([#33][33], [#36][36])
+
+Bugfixes and compatibility improvements:
+
+ * Handle files that have the `wValidBitsPerSample` field set to zero
+   ([#50][50], [#51][51])
+ * Avoid overflow in the channel mask when writing file with more than 32
+   channels ([#59][59], [#60][60])
+
+[33]: https://github.com/ruuda/hound/pull/33
+[36]: https://github.com/ruuda/hound/pull/36
+[40]: https://github.com/ruuda/hound/pull/40
+[41]: https://github.com/ruuda/hound/pull/41
+[42]: https://github.com/ruuda/hound/pull/42
+[50]: https://github.com/ruuda/hound/pull/50
+[51]: https://github.com/ruuda/hound/pull/51
+[59]: https://github.com/ruuda/hound/pull/59
+[60]: https://github.com/ruuda/hound/pull/60
+
+Many thanks to Diffuse, Fletcher Woodruff, Matt Wilkinson, Vitaly Vi Shukela,
+and Tuckerrrrrrrrrr for contributing to this release.
+
 3.4.0
 -----
 
