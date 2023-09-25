@@ -6,8 +6,8 @@ Next
 
 **Compatibility**:
 
- * Ensures compatibility with Rust 1.36.0 through 1.72.1. This bumps the minimum
-   supported Rust version from 1.16 to 1.36.
+ * Ensures compatibility with Rust 1.40.0 through 1.72.1. This bumps the minimum
+   supported Rust version from 1.16 to 1.40.
 
 3.5.0
 -----
