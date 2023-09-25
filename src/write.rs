@@ -778,7 +778,6 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
     unsafe fn write_u16_le_unchecked(&mut self, value: u16) {
         // x86_64 is little endian, so we do not need to shuffle bytes around;
         // we can just store the 16-bit integer in the buffer directly.
-        use std::mem;
         let ptr: *mut u16 = mem::transmute(self.buffer.get_unchecked_mut(self.index as usize));
         *ptr = value;
     }
