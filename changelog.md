@@ -16,10 +16,13 @@ Changes:
  * Soundness: Wrap writes to uninitialized memory in `mem::MaybeUninit`. The
    unsoundness was present in all versions since 0.2.0. There is no evidence
    that rustc took advantage of the unsoundness to compile programs in a
-   problematic way.
+   problematic way. ([#58][58], [#68][68])
 
 Thanks to Cam Lloyd for originally contributing these changes, and thanks to
 Maxwell McKinnon for rebasing them on top of 3.5.0.
+
+[58]: https://github.com/ruuda/hound/pull/58
+[68]: https://github.com/ruuda/hound/pull/68
 
 3.5.0
 -----
