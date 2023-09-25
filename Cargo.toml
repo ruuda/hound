@@ -1,7 +1,7 @@
 [package]
 
 name = "hound"
-version = "3.5.0"
+version = "3.5.1"
 authors = ["Ruud van Asseldonk <dev@veniogames.com>"]
 description = "A wav encoding and decoding library"
 keywords = ["wav", "wave", "audio", "codec"]
