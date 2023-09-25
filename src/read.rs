@@ -186,7 +186,7 @@ impl<R> ReadExt for R
     }
 
     #[inline(always)]
-    fn read_le_f32(&mut self) -> io::Result<f32> {    
+    fn read_le_f32(&mut self) -> io::Result<f32> {
         let mut buf = [0u8; 4];
         try!(self.read_into(&mut buf));
         Ok(f32::from_le_bytes(buf))

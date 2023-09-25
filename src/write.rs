@@ -801,15 +801,17 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
             panic!("Insufficient samples written to the sample writer.");
         }
 
-        // SAFETY: casting `self.buffer` to a `*const [MaybeUninit<u8>]` is safe since the caller guarantees that
-        // `self.buffer` is initialized, and `MaybeUninit<u8>` is guaranteed to have the same layout as `u8`.
-        // The pointer obtained is valid since it refers to memory owned by `self.buffer` which is a
-        // reference and thus guaranteed to be valid for reads.
-        // This is copied from the nightly implementation for slice_assume_init_ref.
+        // SAFETY: casting `self.buffer` to a `*const [MaybeUninit<u8>]` is safe
+        // since the caller guarantees that `self.buffer` is initialized, and
+        // `MaybeUninit<u8>` is guaranteed to have the same layout as `u8`. The
+        // pointer obtained is valid since it refers to memory owned by
+        // `self.buffer` which is a reference and thus guaranteed to be valid
+        // for reads. This is copied from the nightly implementation for
+        // slice_assume_init_ref.
         let slice = unsafe { &*(self.buffer as *const [MaybeUninit<u8>] as *const [u8]) };
 
         try!(self.writer.write_all(slice));
-        
+
         *self.data_bytes_written += self.buffer.len() as u32;
         Ok(())
     }
