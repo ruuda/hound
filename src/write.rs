@@ -763,33 +763,20 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
     /// Note that nothing is actually written until `flush()` is called.
     #[inline(always)]
     pub fn write_sample<S: Sample>(&mut self, sample: S) {
-        assert!((self.index as usize) <= self.buffer.len() - 2,
+        assert!((self.index as usize) + 2 <= self.buffer.len(),
           "Trying to write more samples than reserved for the sample writer.");
 
-        let s = sample.as_i16() as u16;
-
-        // Write the sample in little endian to the buffer.
-        self.buffer[self.index as usize].write(s as u8);
-        self.buffer[self.index as usize + 1].write((s >> 8) as u8);
-
-        self.index += 2;
+        // SAFETY: We performed the bounds check in the above assertion.
+        unsafe { self.write_sample_unchecked(sample) };
     }
 
     unsafe fn write_u16_le_unchecked(&mut self, value: u16) {
         // On little endian machines the compiler produces assembly code
-        // that merges the following two lines into a single instruction. 
-
-        self.buffer.get_unchecked_mut(self.index as usize).write(value as u8);
-        self.buffer.get_unchecked_mut(self.index as usize + 1).write((value >> 8) as u8);
-    }
-
-    #[cfg(not(target_arch = "x86_64"))]
-    unsafe fn write_u16_le_unchecked(&mut self, value: u16) {
-        // Write a sample in little-endian to the buffer, independent of the
-        // endianness of the architecture we are running on.
-        let idx = self.index as usize;
-        *self.buffer.get_unchecked_mut(idx) = value as u8;
-        *self.buffer.get_unchecked_mut(idx + 1) = (value >> 8) as u8;
+        // that merges the following two lines into a single instruction.
+        *self.buffer.get_unchecked_mut(self.index as usize) = MaybeUninit::new(value as u8);
+        self.buffer.get_unchecked_mut(self.index as usize).assume_init();
+        *self.buffer.get_unchecked_mut(self.index as usize + 1) = MaybeUninit::new((value >> 8) as u8);
+        self.buffer.get_unchecked_mut(self.index as usize + 1).assume_init();
     }
 
     /// Like `write_sample()`, but does not perform a bounds check when writing
