@@ -1,6 +1,26 @@
 Changelog
 =========
 
+3.5.1
+-----
+
+Released 2023-09-25.
+
+**Compatibility**:
+
+ * Ensures compatibility with Rust 1.40.0 through 1.72.1. This bumps the minimum
+   supported Rust version from 1.16 to 1.40.
+
+Changes:
+
+ * Soundness: Wrap writes to uninitialized memory in `mem::MaybeUninit`. The
+   unsoundness was present in all versions since 0.2.0. There is no evidence
+   that rustc took advantage of the unsoundness to compile programs in a
+   problematic way.
+
+Thanks to Cam Lloyd for originally contributing these changes, and thanks to
+Maxwell McKinnon for rebasing them on top of 3.5.0.
+
 3.5.0
 -----
 
