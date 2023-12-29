@@ -237,7 +237,7 @@ impl ChunkWritingState {
 /// For simple out-of-the-box wav usage, prefer the `WavWriter` facade.
 pub struct ChunksWriter<W: io::Write + io::Seek> {
     /// underlying writer
-    writer: W,
+    writer: Option<W>,
     /// wave spec, if known at that point
     pub spec_ex: Option<WavSpecEx>,
     /// state of the data chunk, if currently writing it
@@ -254,7 +254,7 @@ impl<W: io::Write + io::Seek> ChunksWriter<W> {
     pub fn new(mut writer: W) -> Result<ChunksWriter<W>> {
         try!(writer.write_all(b"RIFF\0\0\0\0WAVE"));
         Ok(ChunksWriter {
-            writer: writer,
+            writer: Some(writer),
             spec_ex: None,
             dirty: false,
             data_state: None,
@@ -266,10 +266,14 @@ impl<W: io::Write + io::Seek> ChunksWriter<W> {
     ///
     /// The writer is then repositioned at end of file.
     fn update_riff_header(&mut self) -> io::Result<()> {
-        let full_len = try!(self.writer.seek(io::SeekFrom::Current(0)));
-        try!(self.writer.seek(io::SeekFrom::Start(4)));
-        try!(self.writer.write_le_u32(full_len as u32 - 8));
-        try!(self.writer.seek(io::SeekFrom::Current(full_len as i64 - 8)));
+        if let Some(writer) = &mut self.writer {
+            let full_len = try!(writer.seek(io::SeekFrom::Current(0)));
+            try!(writer.seek(io::SeekFrom::Start(4)));
+            try!(writer.write_le_u32(full_len as u32 - 8));
+            try!(writer.seek(io::SeekFrom::Current(full_len as i64 - 8)));
+        } else {
+            panic!("Writer is not available");
+        }
         Ok(())
     }
 
@@ -286,9 +290,13 @@ impl<W: io::Write + io::Seek> ChunksWriter<W> {
     fn update_data_chunk_header(&mut self) -> Result<()> {
         let data_state = self.data_state.expect("Should only be called in data chunk");
         let spec_ex = self.spec_ex.expect("Data chunk implies known format");
-        try!(self.writer.seek(io::SeekFrom::End(-(data_state.len as i64 + 4))));
-        try!(self.writer.write_le_u32(data_state.len));
-        try!(self.writer.seek(io::SeekFrom::End(0)));
+        if let Some(writer) = &mut self.writer {
+            try!(writer.seek(io::SeekFrom::End(-(data_state.len as i64 + 4))));
+            try!(writer.write_le_u32(data_state.len));
+            try!(writer.seek(io::SeekFrom::End(0)));
+        } else {
+            panic!("Writer is not available");
+        }
 
         // Signal error if the last sample was not finished, but do so after
         // everything has been written, so that no data is lost, even though
@@ -306,13 +314,19 @@ impl<W: io::Write + io::Seek> ChunksWriter<W> {
     /// The function returns an `EmbeddedWriter` that must be used to write
     /// the chunk content. It will take care of maintaining the chunk length in
     /// the chunk header.
-    pub fn start_chunk(&mut self, fourcc:[u8;4]) -> Result<EmbeddedWriter<W>> {
+    pub fn start_chunk(&mut self, fourcc: [u8; 4]) -> Result<EmbeddedWriter<W>> {
         self.data_state = None;
         self.dirty = true;
-        try!(self.writer.write_all(&fourcc));
-        try!(self.writer.write_le_u32(0));
+    
+        if let Some(writer) = &mut self.writer {
+            try!(writer.write_all(&fourcc));
+            try!(writer.write_le_u32(0));
+        } else {
+            panic!("Writer is not available");
+        }
+    
         Ok(EmbeddedWriter {
-            writer: &mut self.writer,
+            writer: self.writer.as_mut().unwrap(), // Safe to unwrap here after the check above
             state: ChunkWritingState { len: 0 },
             finalized: false,
         })
@@ -323,8 +337,13 @@ impl<W: io::Write + io::Seek> ChunksWriter<W> {
         if self.spec_ex.is_none() {
             panic!("Format must be written before data");
         }
-        try!(self.writer.write_all(b"data"));
-        try!(self.writer.write_le_u32(0));
+        if let Some(writer) = &mut self.writer {
+            try!(writer.write_all(b"data"));
+            try!(writer.write_le_u32(0));
+        } else {
+            panic!("Writer is not available");
+        }
+
         self.data_state = Some(ChunkWritingState { len: 0 });
         self.dirty = true;
         Ok(())
@@ -348,7 +367,11 @@ impl<W: io::Write + io::Seek> ChunksWriter<W> {
     /// header and the data chunk header if required.
     pub fn flush(&mut self) -> Result<()> {
         try!(self.update_headers());
-        try!(self.writer.flush());
+        if let Some(writer) = &mut self.writer {
+            try!(writer.flush());
+        } else {
+            panic!("Writer is not available");
+        }
         Ok(())
     }
 
@@ -396,20 +419,24 @@ impl<W: io::Write + io::Seek> ChunksWriter<W> {
         }
 
         let mut header = [0u8; 48];
-        try!(self.writer.write(b"fmt "));
-        let written = {
-            let mut buffer = io::Cursor::new(&mut header[..]);
-            match fmt_kind {
-                FmtKind::PcmWaveFormat => {
-                    try!(Self::write_pcmwaveformat(spec_ex, &mut buffer));
+        if let Some(writer) = &mut self.writer {
+            try!(writer.write(b"fmt "));
+            let written = {
+                let mut buffer = io::Cursor::new(&mut header[..]);
+                match fmt_kind {
+                    FmtKind::PcmWaveFormat => {
+                        try!(Self::write_pcmwaveformat(spec_ex, &mut buffer));
+                    }
+                    FmtKind::WaveFormatExtensible => {
+                        try!(Self::write_waveformatextensible(spec_ex, &mut buffer));
+                    }
                 }
-                FmtKind::WaveFormatExtensible => {
-                    try!(Self::write_waveformatextensible(spec_ex, &mut buffer));
-                }
-            }
-            buffer.position()
-        };
-        try!(self.writer.write_all(&header[..written as usize]));
+                buffer.position()
+            };
+            try!(writer.write_all(&header[..written as usize]));
+        } else {
+            panic!("Writer is not available");
+        }
 
         self.spec_ex = Some(spec_ex);
 
@@ -533,11 +560,15 @@ impl<W: io::Write + io::Seek> ChunksWriter<W> {
     #[inline]
     pub fn write_sample<S: Sample>(&mut self, sample: S) -> Result<()> {
         let spec_ex = self.spec_ex.expect("Format should have written before this call");
-        try!(sample.write_padded(
-            &mut self.writer,
-            spec_ex.spec.bits_per_sample,
-            spec_ex.bytes_per_sample
-        ));
+        if let Some(writer) = &mut self.writer {
+            try!(sample.write_padded(
+                writer,
+                spec_ex.spec.bits_per_sample,
+                spec_ex.bytes_per_sample
+            ));
+        } else {
+            panic!("Writer is not available");
+        }
         let written = spec_ex.bytes_per_sample as u32;
         self.data_state.as_mut().expect("Can only be called positioned in data chunk").len += written;
         Ok(())
@@ -583,19 +614,37 @@ impl<W: io::Write + io::Seek> ChunksWriter<W> {
             self.sample_writer_buffer = new_buffer;
         }
 
-        SampleWriter16 {
-            writer: &mut self.writer,
-            buffer: &mut self.sample_writer_buffer[..num_bytes],
-            data_bytes_written:
-                &mut self.data_state.as_mut().expect("Can only be called positioned in data chunk").len,
-            index: 0,
+        if let Some(writer) = &mut self.writer {
+            SampleWriter16 {
+                writer,
+                buffer: &mut self.sample_writer_buffer[..num_bytes],
+                data_bytes_written:
+                    &mut self.data_state.as_mut().expect("Can only be called positioned in data chunk").len,
+                index: 0,
+            }
+        } else {
+            panic!("Writer is not available");
         }
+    }
+
+    /// Destroys the `WavWriter` and returns the underlying writer.
+    pub fn into_inner(mut self) -> W {
+        // Flush the writer before taking (since drop will have a None writer)
+        if let Some(_) = &mut self.writer {
+            let _ = self.flush();
+        } else {
+            panic!("Writer is not available");
+        }
+        
+        self.writer.take().expect("ChunksWriter has no writer")
     }
 }
 
 impl<W: io::Write + io::Seek> Drop for ChunksWriter<W> {
     fn drop(&mut self) {
-        let _ = self.flush();
+        if let Some(writer) = &mut self.writer {
+            let _ = self.flush();
+        }
     }
 }
 
@@ -747,6 +796,11 @@ impl<W> WavWriter<W>
         let writer_state = self.writer.data_state.expect("ChunkWriter in weird state");
         writer_state.len / spec_ex.bytes_per_sample as u32
     }
+
+    /// Destroys the `WavWriter` and returns the underlying writer.
+    pub fn into_inner(self) -> W {
+        self.writer.into_inner()
+    }
 }
 
 /// Reads the relevant parts of the header required to support append.
@@ -835,7 +889,7 @@ impl WavWriter<io::BufWriter<fs::File>> {
         let writer = WavWriter {
             writer: ChunksWriter {
                 spec_ex: Some(spec_ex),
-                writer: buf_writer,
+                writer: Some(buf_writer),
                 sample_writer_buffer: Vec::new(),
                 dirty: true,
                 data_state: Some(ChunkWritingState { len: data_len }),
@@ -865,7 +919,7 @@ impl<W> WavWriter<W> where W: io::Read + io::Write + io::Seek {
         let writer = WavWriter {
             writer: ChunksWriter {
                 spec_ex: Some(spec_ex),
-                writer: writer,
+                writer: Some(writer),
                 sample_writer_buffer: Vec::new(),
                 dirty: true,
                 data_state: Some(ChunkWritingState { len: data_len }),
