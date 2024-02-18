@@ -658,6 +658,8 @@ impl<R: io::Read> ChunksReader<R> {
         let sample_format = match subformat {
             super::KSDATAFORMAT_SUBTYPE_PCM => SampleFormat::Int,
             super::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT => SampleFormat::Float,
+            super::KSDATAFORMAT_SUBTYPE_AMBISONIC_B_FORMAT_PCM => SampleFormat::Int,
+            super::KSDATAFORMAT_SUBTYPE_AMBISONIC_B_FORMAT_IEE_FLOAT => SampleFormat::Float,
             _ => return Err(Error::Unsupported),
         };
 
