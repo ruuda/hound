@@ -66,6 +66,7 @@ use std::result;
 use write::WriteExt;
 
 mod read;
+pub mod wav;
 mod write;
 
 pub use read::{read_wave_header, WavIntoSamples, WavReader, WavSamples};
