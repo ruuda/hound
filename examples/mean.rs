@@ -38,8 +38,16 @@ fn main() {
     });
     let ms = ts / n;
     let mu = tu / n;
-    println!("mean signed:   {} (should be 0, deviation is {})", ms, ms.abs());
-    println!("mean unsigned: {} (should be 2^16 - 1, deviation is {})", mu, (mu - 32767.0).abs());
+    println!(
+        "mean signed:   {} (should be 0, deviation is {})",
+        ms,
+        ms.abs()
+    );
+    println!(
+        "mean unsigned: {} (should be 2^16 - 1, deviation is {})",
+        mu,
+        (mu - 32767.0).abs()
+    );
 
     let (ts, tu) = samples.iter().fold((0.0, 0.0), |(ts, tu), &s| {
         let ds = s as f64 - ms;

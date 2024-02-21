@@ -38,15 +38,21 @@ fn main() {
     // has the right spec, because that is what we assume when writing.
     assert_eq!(spec, writer.spec());
 
-    println!("Old duration is {} seconds.", writer.duration() / spec.sample_rate);
+    println!(
+        "Old duration is {} seconds.",
+        writer.duration() / spec.sample_rate
+    );
 
-    for t in (0 .. 44100).map(|x| x as f32 / 44100.0) {
+    for t in (0..44100).map(|x| x as f32 / 44100.0) {
         let sample = (t * 440.0 * 2.0 * PI).sin();
         let amplitude = i16::MAX as f32;
         writer.write_sample((sample * amplitude) as i16).unwrap();
     }
 
-    println!("New duration is {} seconds.", writer.duration() / spec.sample_rate);
+    println!(
+        "New duration is {} seconds.",
+        writer.duration() / spec.sample_rate
+    );
 
     writer.finalize().unwrap();
 }

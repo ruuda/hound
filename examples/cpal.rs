@@ -12,8 +12,8 @@
 
 // This example shows how to play a wav file using the cpal crate.
 
-extern crate hound;
 extern crate cpal;
+extern crate hound;
 
 use std::env;
 use std::thread;
@@ -28,10 +28,12 @@ fn main() {
 
     // Pick a playback format supported by the endpoint, which matches the spec
     // of the wav file.
-    let format = endpoint.get_supported_formats_list().unwrap()
-                         .filter(|f| matches_format(f, &spec))
-                         .next()
-                         .expect("no supported playback format");
+    let format = endpoint
+        .get_supported_formats_list()
+        .unwrap()
+        .filter(|f| matches_format(f, &spec))
+        .next()
+        .expect("no supported playback format");
 
     // A voice in cpal is used for playback.
     let mut voice = cpal::Voice::new(&endpoint, &format).unwrap();
@@ -58,7 +60,7 @@ fn main() {
                 }
                 samples_left -= buf.len();
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
 
         // Loop again if there are samples left.
@@ -83,21 +85,21 @@ fn main() {
 fn matches_format(format: &cpal::Format, spec: &hound::WavSpec) -> bool {
     let cpal::SamplesRate(sample_rate) = format.samples_rate;
     if sample_rate != spec.sample_rate {
-        return false
+        return false;
     }
 
     if format.channels.len() != spec.channels as usize {
-        return false
+        return false;
     }
 
     let data_type = match (spec.bits_per_sample, spec.sample_format) {
         (16, hound::SampleFormat::Int) => Some(cpal::SampleFormat::I16),
         (32, hound::SampleFormat::Float) => Some(cpal::SampleFormat::F32),
-        _ => None
+        _ => None,
     };
 
     if Some(format.data_type) != data_type {
-        return false
+        return false;
     }
 
     // If the sample rate, channel count, and sample format match, then we can

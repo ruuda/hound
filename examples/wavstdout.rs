@@ -22,7 +22,7 @@ fn main() {
     loop {
         for i in 0..126 {
             use hound::Sample;
-            let x : i16 = (i * 256) as i16;
+            let x: i16 = (i * 256) as i16;
             if x.write(&mut so, 16).is_err() {
                 return;
             }
