@@ -78,6 +78,7 @@ impl Bytes for [u8] {
 }
 
 /// The outermost header of a wav file: the RIFF header.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct RiffHeader {
     /// The length in bytes of the data that follows the header.
     ///
@@ -125,6 +126,19 @@ impl RiffHeader {
     pub fn nonstandard_infinite() -> RiffHeader {
         RiffHeader {
             inner_len: u32::MAX
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::RiffHeader;
+
+    #[test]
+    fn riff_header_roundtrips() {
+        for len in [0, 1, 0x100, 0x12ef34cd] {
+            let h = RiffHeader { inner_len: len };
+            assert_eq!(RiffHeader::from_bytes(h.to_bytes()).unwrap(), h);
         }
     }
 }
