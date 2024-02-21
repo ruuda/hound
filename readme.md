@@ -70,10 +70,10 @@ on a case-by-case basis.
 Minimum supported Rust version
 ------------------------------
 
- * Hound supports at a minimum the Rust versions younger than 3 years at the
-   time of a Hound release. For example, a release on 2020-06-03 would support
-   Rust 1.18.0, released on 2017-06-08, but it might not support Rust 1.17.0,
-   released on 2017-04-27.
+ * For Hound 4.x, the minimum supported Rust version is 1.56.1, the first
+   version to support Rust edition 2021.
+ * Hound aims to support a minimum Rust version that is at least 2 years old
+   at the time of a Hound release.
  * Compatibility is always stated in the changelog.
  * Hound tests on CI against the oldest supported version and the current stable
    Rust version, but not every individual version in between.
