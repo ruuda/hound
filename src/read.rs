@@ -15,7 +15,6 @@ use std::cmp;
 use std::fs;
 use std::io;
 use std::marker;
-use std::mem;
 use std::path;
 
 /// Extends the functionality of `io::Read` with additional methods.
