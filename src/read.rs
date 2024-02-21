@@ -660,7 +660,7 @@ impl<R: io::Read> ChunksReader<R> {
             super::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT => SampleFormat::Float,
             // TODO: Add a way to distinguish those from linear PCM.
             super::KSDATAFORMAT_SUBTYPE_AMBISONIC_B_FORMAT_PCM => SampleFormat::Int,
-            super::KSDATAFORMAT_SUBTYPE_AMBISONIC_B_FORMAT_IEE_FLOAT => SampleFormat::Float,
+            super::KSDATAFORMAT_SUBTYPE_AMBISONIC_B_FORMAT_IEEE_FLOAT => SampleFormat::Float,
             _ => return Err(Error::Unsupported),
         };
 
