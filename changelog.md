@@ -1,6 +1,26 @@
 Changelog
 =========
 
+4.0.0
+-----
+
+(Unreleased)
+
+**Compatibility**:
+
+ * Many parts of Hound have been rewritten. The APIs are generally different and
+   not compatible. See below for how to update.
+ * The minimum supported Rust version is now 1.56.1.
+
+Hound 4.0 is a complete redesign that incorporates learnings from many years of
+using and maintaining Hound, as well as edge cases and requests discovered by
+contributors. It is written to be compatible with the 2021 edition of Rust, and
+leverages some newer additions to the standard library. Newer features in the
+standard library also enable Hound to have a less `unsafe` code. (TODO: Zero?)
+
+TODO: Write an upgrade guide.
+TODO: Identify all contributors and thank them.
+
 3.5.1
 -----
 
