@@ -325,7 +325,7 @@ impl<R: io::Read> ChunksReader<R> {
     pub fn new(mut reader: R) -> Result<ChunksReader<R>> {
         read_wave_header(&mut reader)?;
         Ok(ChunksReader {
-            reader: reader,
+            reader,
             spec_ex: None,
             data_state: None,
         })
@@ -379,6 +379,9 @@ impl<R: io::Read> ChunksReader<R> {
     /// For Data, the underlying reader will be left at the beginning
     /// of the first sample, and `data_state` will be created to allow
     /// keep track of the audio samples parsing.
+    // This name is part of the current API and not easy to change,
+    // a future version will for sure consider implementing Iterator.
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Result<Option<Chunk<R>>> {
         if let Some(ref mut data) = self.data_state {
             data.chunk.skip_remaining(&mut self.reader)?
@@ -413,7 +416,7 @@ impl<R: io::Read> ChunksReader<R> {
             b"data" => {
                 if let Some(spec_ex) = self.spec_ex {
                     self.data_state = Some(DataReadingState {
-                        spec_ex: spec_ex,
+                        spec_ex,
                         chunk: ChunkReadingState {
                             len: len as u64,
                             remaining: len as u64,
@@ -536,7 +539,7 @@ impl<R: io::Read> ChunksReader<R> {
         let mut spec = WavSpec {
             channels: n_channels,
             sample_rate: n_samples_per_sec,
-            bits_per_sample: bits_per_sample,
+            bits_per_sample,
             sample_format: SampleFormat::Int,
         };
 
@@ -558,8 +561,8 @@ impl<R: io::Read> ChunksReader<R> {
         };
 
         Ok(WavSpecEx {
-            spec: spec,
-            bytes_per_sample: bytes_per_sample,
+            spec,
+            bytes_per_sample,
         })
     }
 
@@ -820,7 +823,7 @@ where
         if reader.spec_ex.is_none() {
             return Err(Error::FormatError("Wave file with no fmt header"));
         }
-        Ok(WavReader { reader: reader })
+        Ok(WavReader { reader })
     }
 
     /// Returns information about the WAVE file.
@@ -846,7 +849,7 @@ where
     ///
     /// The type of `S` (int or float) must match `spec().sample_format`,
     /// otherwise every iteration will return an error.
-    pub fn samples<'wr, S: Sample>(&'wr mut self) -> WavSamples<'wr, R, S> {
+    pub fn samples<S: Sample>(&mut self) -> WavSamples<R, S> {
         self.reader.samples()
     }
 
@@ -951,7 +954,7 @@ where
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        iter_size_hint(&self.reader)
+        iter_size_hint(self.reader)
     }
 }
 

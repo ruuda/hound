@@ -16,7 +16,6 @@ use read::WavSpecEx;
 use std::fs;
 use std::io;
 use std::io::{Seek, Write};
-use std::mem;
 use std::mem::MaybeUninit;
 use std::path;
 
@@ -117,8 +116,7 @@ where
 
     #[inline(always)]
     fn write_le_f32(&mut self, x: f32) -> io::Result<()> {
-        let u = unsafe { mem::transmute::<f32, u32>(x) };
-        self.write_le_u32(u)
+        self.write_le_u32(x.to_bits())
     }
 }
 
@@ -272,7 +270,7 @@ impl<W: io::Write + io::Seek> ChunksWriter<W> {
     pub fn new(mut writer: W) -> Result<ChunksWriter<W>> {
         writer.write_all(b"RIFF\0\0\0\0WAVE")?;
         Ok(ChunksWriter {
-            writer: writer,
+            writer,
             spec_ex: None,
             dirty: false,
             data_state: None,
@@ -404,20 +402,13 @@ impl<W: io::Write + io::Seek> ChunksWriter<W> {
         // Hound can only write those bit depths. If something else was
         // requested, fail early, rather than writing a header but then failing
         // at the first sample.
-        let supported = match spec.bits_per_sample {
-            8 => true,
-            16 => true,
-            24 => true,
-            32 => true,
-            _ => false,
-        };
-
-        if !supported {
-            return Err(Error::Unsupported);
+        match spec.bits_per_sample {
+            8 | 16 | 24 | 32 => {}
+            _ => return Err(Error::Unsupported),
         }
 
         let mut header = [0u8; 48];
-        self.writer.write(b"fmt ")?;
+        self.writer.write_all(b"fmt ")?;
         let written = {
             let mut buffer = io::Cursor::new(&mut header[..]);
             match fmt_kind {
@@ -670,7 +661,7 @@ where
     /// returned.
     pub fn new(writer: W, spec: WavSpec) -> Result<WavWriter<W>> {
         let spec_ex = WavSpecEx {
-            spec: spec,
+            spec,
             bytes_per_sample: (spec.bits_per_sample + 7) / 8,
         };
         Self::new_with_spec_ex(writer, spec_ex)
@@ -719,7 +710,7 @@ where
     ///
     /// Attempting to write more than `num_samples` samples to the writer will
     /// panic too.
-    pub fn get_i16_writer<'s>(&'s mut self, num_samples: u32) -> SampleWriter16<'s, W> {
+    pub fn get_i16_writer(&mut self, num_samples: u32) -> SampleWriter16<W> {
         self.writer.get_i16_writer(num_samples)
     }
 
@@ -817,16 +808,9 @@ fn read_append<W: io::Read + io::Seek>(reader: &mut W) -> Result<(WavSpecEx, u32
 
     // Hound cannot read or write other bit depths than those, so rather
     // than refusing to write later, fail early.
-    let supported = match (spec_ex.bytes_per_sample, spec_ex.spec.bits_per_sample) {
-        (1, 8) => true,
-        (2, 16) => true,
-        (3, 24) => true,
-        (4, 32) => true,
-        _ => false,
-    };
-
-    if !supported {
-        return Err(Error::Unsupported);
+    match (spec_ex.bytes_per_sample, spec_ex.spec.bits_per_sample) {
+        (1, 8) | (2, 16) | (3, 24) | (4, 32) => {}
+        _ => return Err(Error::Unsupported),
     }
 
     // The number of samples must be a multiple of the number of channels,
@@ -921,7 +905,7 @@ where
         let writer = WavWriter {
             writer: ChunksWriter {
                 spec_ex: Some(spec_ex),
-                writer: writer,
+                writer,
                 sample_writer_buffer: Vec::new(),
                 dirty: true,
                 data_state: Some(ChunkWritingState { len: data_len }),
@@ -1009,6 +993,8 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
 
     /// Like `write_sample()`, but does not perform a bounds check when writing
     /// to the internal buffer.
+    ///
+    /// # Safety
     ///
     /// It is the responsibility of the programmer to ensure that no more
     /// samples are written than allocated when the writer was created.

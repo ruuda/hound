@@ -53,6 +53,9 @@
 //! println!("RMS is {}", (sqr_sum / reader.len() as f64).sqrt());
 //! ```
 
+#![allow(clippy::identity_op)]
+#![allow(clippy::len_without_is_empty)]
+#![allow(clippy::zero_prefixed_literal)]
 #![warn(missing_docs)]
 
 use read::ReadExt;
@@ -95,7 +98,7 @@ pub trait Sample: Sized {
     /// This does not change the value of the sample, it only casts it. The
     /// value is assumed to fit within the range. This is not verified,
     /// truncation may occur.
-    fn as_i16(self) -> i16;
+    fn as_i16(&self) -> i16;
 }
 
 /// Converts an unsigned integer in the range 0-255 to a signed one in the range -128-127.
@@ -197,8 +200,8 @@ impl Sample for i8 {
     }
 
     #[inline(always)]
-    fn as_i16(self) -> i16 {
-        self as i16
+    fn as_i16(&self) -> i16 {
+        *self as i16
     }
 
     fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<i8> {
@@ -231,8 +234,8 @@ impl Sample for i16 {
     }
 
     #[inline(always)]
-    fn as_i16(self) -> i16 {
-        self
+    fn as_i16(&self) -> i16 {
+        *self
     }
 
     fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<i16> {
@@ -266,8 +269,8 @@ impl Sample for i32 {
     }
 
     #[inline(always)]
-    fn as_i16(self) -> i16 {
-        self as i16
+    fn as_i16(&self) -> i16 {
+        *self as i16
     }
 
     fn read<R: io::Read>(reader: &mut R, fmt: SampleFormat, bytes: u16, bits: u16) -> Result<i32> {
@@ -299,7 +302,7 @@ impl Sample for f32 {
         }
     }
 
-    fn as_i16(self) -> i16 {
+    fn as_i16(&self) -> i16 {
         panic!("Calling as_i16 with an f32 is invalid.");
     }
 
