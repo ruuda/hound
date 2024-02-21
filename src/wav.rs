@@ -28,8 +28,18 @@
 //!
 //! This module contains those low-level building blocks. For the higher level
 //! API, see the crate root.
-
-use crate::wav::Error::FormatError;
+//!
+//! ## File layout
+//!
+//! A wav file has the following structure:
+//!
+//! ```text
+//! RiffHeader
+//! foreach chunk {
+//!     ChunkHeader
+//!     <chunk contents>
+//! }
+//! ```
 
 /// The error type for all operations in Hound.
 // TODO: Move this to the crate root.
@@ -54,6 +64,7 @@ trait Bytes {
     fn read_4_bytes(&self) -> [u8; 4];
     fn read_le_u32(&self) -> u32;
 
+    fn write_4_bytes(&mut self, bytes: [u8; 4]);
     fn write_le_u32(&mut self, x: u32);
 }
 
@@ -69,15 +80,22 @@ impl Bytes for [u8] {
     }
 
     #[inline(always)]
+    fn write_4_bytes(&mut self, bytes: [u8; 4]) {
+        self[0] = bytes[0];
+        self[1] = bytes[1];
+        self[2] = bytes[2];
+        self[3] = bytes[3];
+    }
+
+    #[inline(always)]
     fn write_le_u32(&mut self, x: u32) {
-        self[0] = ((x & 0xff) >> 0) as u8;
-        self[1] = ((x & 0xffff) >> 8) as u8;
-        self[2] = ((x & 0xffffff) >> 16) as u8;
-        self[3] = ((x & 0xffffffff) >> 24) as u8;
+        self.write_4_bytes(x.to_le_bytes())
     }
 }
 
 /// The outermost header of a wav file: the RIFF header.
+///
+/// The RIFF header is followed by a [`ChunkHeader`].
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct RiffHeader {
     /// The length in bytes of the data that follows the header.
@@ -101,13 +119,13 @@ impl RiffHeader {
     #[inline(always)]
     pub fn from_bytes(bytes: [u8; 12]) -> Result<RiffHeader> {
         if &bytes.read_4_bytes() != b"RIFF" {
-            return Err(FormatError("Expected RIFF tag."));
+            return Err(Error::FormatError("Expected RIFF tag."));
         }
         let result = RiffHeader {
             inner_len: bytes[4..].read_le_u32(),
         };
         if &bytes[8..].read_4_bytes() != b"WAVE" {
-            return Err(FormatError("Expected WAVE tag."));
+            return Err(Error::FormatError("Expected WAVE tag."));
         }
         Ok(result)
     }
@@ -125,20 +143,90 @@ impl RiffHeader {
     /// See also the note on [`RiffHeader::inner_len`].
     pub fn nonstandard_infinite() -> RiffHeader {
         RiffHeader {
-            inner_len: u32::MAX
+            inner_len: u32::MAX,
         }
+    }
+}
+
+/// The chunk header.
+///
+/// After the [`RiffHeader`], a wav file consists of multiple chunks, and each
+/// of those start with a chunk header. A few known chunk kinds are:
+///
+/// ## Format — `b"fmt "`
+///
+/// The format chunk contains the waveformat struct that indicates the bit depth,
+/// number of channels, etc. The format chunk is mandatory.
+///
+/// ## Fact — `b"fact"`
+///
+/// All (compressed) non-PCM formats must have a fact chunk
+/// (Rev. 3 documentation). The chunk contains at least one
+/// value, the number of samples in the file.
+///
+/// The number of samples field is redundant for sampled data, since the data
+/// chunk indicates the length of the data. The number of samples can be
+/// determined from the length of the data and the container size as determined
+/// from the format chunk.
+///
+/// See also:
+/// <http://www-mmsp.ece.mcgill.ca/documents/audioformats/wave/wave.html>
+///
+/// ## Data — `b"data"`
+///
+/// The data chunk contains the audio samples itself. It must be the final chunk
+/// in the file.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct ChunkHeader {
+    /// The chunk kind, see above for common kinds.
+    pub kind: [u8; 4],
+
+    /// The length of the chunk in bytes, excluding this 8-byte header.
+    pub inner_len: u32,
+}
+
+impl ChunkHeader {
+    /// Parse a chunk header.
+    #[inline(always)]
+    pub fn from_bytes(bytes: [u8; 8]) -> ChunkHeader {
+        ChunkHeader {
+            kind: bytes.read_4_bytes(),
+            inner_len: bytes[4..].read_le_u32(),
+        }
+    }
+
+    /// Serialize the header for writing to a file.
+    #[inline(always)]
+    pub fn to_bytes(self) -> [u8; 8] {
+        let mut result = [0_u8; 8];
+        result[0..].write_4_bytes(self.kind);
+        result[4..].write_le_u32(self.inner_len);
+        result
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::RiffHeader;
+    use super::{ChunkHeader, RiffHeader};
 
     #[test]
     fn riff_header_roundtrips() {
         for len in [0, 1, 0x100, 0x12ef34cd] {
             let h = RiffHeader { inner_len: len };
             assert_eq!(RiffHeader::from_bytes(h.to_bytes()).unwrap(), h);
+        }
+    }
+
+    #[test]
+    fn chunk_header_roundtrips() {
+        for kind in [b"fmt ", b"data"] {
+            for len in [0, 1, 0x100, 0x12ef34cd] {
+                let h = ChunkHeader {
+                    kind: *kind,
+                    inner_len: len,
+                };
+                assert_eq!(ChunkHeader::from_bytes(h.to_bytes()), h);
+            }
         }
     }
 }
