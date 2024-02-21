@@ -10,13 +10,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::{Error, Result, Sample, SampleFormat, WavSpec};
 use std::cmp;
 use std::fs;
 use std::io;
 use std::marker;
 use std::mem;
 use std::path;
-use super::{Error, Result, Sample, SampleFormat, WavSpec};
 
 /// Extends the functionality of `io::Read` with additional methods.
 ///
@@ -73,17 +73,21 @@ pub trait ReadExt: io::Read {
 }
 
 impl<R> ReadExt for R
-    where R: io::Read
+where
+    R: io::Read,
 {
     #[inline(always)]
     fn read_into(&mut self, buf: &mut [u8]) -> io::Result<()> {
         let mut n = 0;
         while n < buf.len() {
-            let progress = try!(self.read(&mut buf[n..]));
+            let progress = self.read(&mut buf[n..])?;
             if progress > 0 {
                 n += progress;
             } else {
-                return Err(io::Error::new(io::ErrorKind::Other, "Failed to read enough bytes."));
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Failed to read enough bytes.",
+                ));
             }
         }
         Ok(())
@@ -99,11 +103,14 @@ impl<R> ReadExt for R
         let mut buf = [0u8; 1024];
         while n_read < n {
             let end = cmp::min(n - n_read, 1024);
-            let progress = try!(self.read(&mut buf[0..end]));
+            let progress = self.read(&mut buf[0..end])?;
             if progress > 0 {
                 n_read += progress;
             } else {
-                return Err(io::Error::new(io::ErrorKind::Other, "Failed to read enough bytes."));
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Failed to read enough bytes.",
+                ));
             }
         }
         Ok(())
@@ -112,7 +119,7 @@ impl<R> ReadExt for R
     #[inline(always)]
     fn read_4_bytes(&mut self) -> io::Result<[u8; 4]> {
         let mut buf = [0_u8; 4];
-        try!(self.read_into(&mut buf[..]));
+        self.read_into(&mut buf[..])?;
         Ok(buf)
     }
 
@@ -124,7 +131,7 @@ impl<R> ReadExt for R
     #[inline(always)]
     fn read_u8(&mut self) -> io::Result<u8> {
         let mut buf = [0u8; 1];
-        try!(self.read_into(&mut buf));
+        self.read_into(&mut buf)?;
         Ok(buf[0])
     }
 
@@ -136,7 +143,7 @@ impl<R> ReadExt for R
     #[inline(always)]
     fn read_le_u16(&mut self) -> io::Result<u16> {
         let mut buf = [0u8; 2];
-        try!(self.read_into(&mut buf));
+        self.read_into(&mut buf)?;
         Ok((buf[1] as u16) << 8 | (buf[0] as u16))
     }
 
@@ -169,7 +176,7 @@ impl<R> ReadExt for R
     #[inline(always)]
     fn read_le_u24(&mut self) -> io::Result<u32> {
         let mut buf = [0u8; 3];
-        try!(self.read_into(&mut buf));
+        self.read_into(&mut buf)?;
         Ok((buf[2] as u32) << 16 | (buf[1] as u32) << 8 | (buf[0] as u32))
     }
 
@@ -181,15 +188,17 @@ impl<R> ReadExt for R
     #[inline(always)]
     fn read_le_u32(&mut self) -> io::Result<u32> {
         let mut buf = [0u8; 4];
-        try!(self.read_into(&mut buf));
-        Ok((buf[3] as u32) << 24 | (buf[2] as u32) << 16 |
-           (buf[1] as u32) << 8  | (buf[0] as u32) << 0)
+        self.read_into(&mut buf)?;
+        Ok((buf[3] as u32) << 24
+            | (buf[2] as u32) << 16
+            | (buf[1] as u32) << 8
+            | (buf[0] as u32) << 0)
     }
 
     #[inline(always)]
-    fn read_le_f32(&mut self) -> io::Result<f32> {    
+    fn read_le_f32(&mut self) -> io::Result<f32> {
         let mut buf = [0u8; 4];
-        try!(self.read_into(&mut buf));
+        self.read_into(&mut buf)?;
         Ok(f32::from_le_bytes(buf))
     }
 }
@@ -203,22 +212,29 @@ pub struct ChunkReadingState {
 }
 
 impl ChunkReadingState {
-    fn read<R:io::Read>(&mut self, reader: &mut R, buffer: &mut[u8]) -> io::Result<usize> {
+    fn read<R: io::Read>(&mut self, reader: &mut R, buffer: &mut [u8]) -> io::Result<usize> {
         let max = cmp::min(buffer.len(), self.remaining as usize);
-        let read = try!(reader.read(&mut buffer[0..max]));
+        let read = reader.read(&mut buffer[0..max])?;
         self.remaining -= read as u64;
         Ok(read)
     }
 
-    fn seek<R: io::Read + io::Seek>(&mut self, reader: &mut R, seek: io::SeekFrom) -> io::Result<u64> {
+    fn seek<R: io::Read + io::Seek>(
+        &mut self,
+        reader: &mut R,
+        seek: io::SeekFrom,
+    ) -> io::Result<u64> {
         let current_position = (self.len - self.remaining) as i64;
         let wanted_position = match seek {
-           io::SeekFrom::Current(offset) => current_position + offset,
-           io::SeekFrom::Start(pos) => pos as i64,
-           io::SeekFrom::End(pos) => pos as i64 + self.len as i64,
+            io::SeekFrom::Current(offset) => current_position + offset,
+            io::SeekFrom::Start(pos) => pos as i64,
+            io::SeekFrom::End(pos) => pos as i64 + self.len as i64,
         };
         if wanted_position < 0 {
-            Err(io::Error::new(io::ErrorKind::Other, "Seeking before begin of chunk"))
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Seeking before begin of chunk",
+            ))
         } else if wanted_position as u64 > self.len {
             self.remaining = 0;
             self.len = wanted_position as u64;
@@ -229,7 +245,7 @@ impl ChunkReadingState {
         }
     }
 
-    fn skip_remaining<R:io::Read>(&mut self, reader: &mut R) -> io::Result<()> {
+    fn skip_remaining<R: io::Read>(&mut self, reader: &mut R) -> io::Result<()> {
         reader.skip_bytes((self.remaining + self.len % 2) as usize)
     }
 }
@@ -254,7 +270,7 @@ impl<'r, R: 'r + io::Read> Drop for EmbeddedReader<'r, R> {
 }
 
 impl<'r, R: io::Read> io::Read for EmbeddedReader<'r, R> {
-    fn read(&mut self, buffer: &mut[u8]) -> io::Result<usize> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
         self.state.read(&mut self.reader, buffer)
     }
 }
@@ -308,7 +324,7 @@ impl<R: io::Read> ChunksReader<R> {
     /// This function will only read the Riff header from the file
     /// in order to position the stream to the first chunk.
     pub fn new(mut reader: R) -> Result<ChunksReader<R>> {
-        try!(read_wave_header(&mut reader));
+        read_wave_header(&mut reader)?;
         Ok(ChunksReader {
             reader: reader,
             spec_ex: None,
@@ -340,7 +356,6 @@ impl<R: io::Read> ChunksReader<R> {
             reader: self,
             phantom_sample: marker::PhantomData,
         }
-
     }
 
     /// Same as `samples`, but takes ownership of the `ChunksReader`.
@@ -367,7 +382,7 @@ impl<R: io::Read> ChunksReader<R> {
     /// keep track of the audio samples parsing.
     pub fn next(&mut self) -> Result<Option<Chunk<R>>> {
         if let Some(ref mut data) = self.data_state {
-            try!(data.chunk.skip_remaining(&mut self.reader))
+            data.chunk.skip_remaining(&mut self.reader)?
         }
         self.data_state = None;
         let mut kind_str = [0; 4];
@@ -375,10 +390,10 @@ impl<R: io::Read> ChunksReader<R> {
             // FIXME EOF is indistinguishable from actual errors in read_into
             return Ok(None);
         }
-        let len = try!(self.reader.read_le_u32());
+        let len = self.reader.read_le_u32()?;
         match &kind_str {
             b"fmt " => {
-                let spec_ex = try!(self.read_fmt_chunk(len));
+                let spec_ex = self.read_fmt_chunk(len)?;
                 self.spec_ex = Some(spec_ex);
                 Ok(Some(Chunk::Fmt(spec_ex)))
             }
@@ -400,7 +415,10 @@ impl<R: io::Read> ChunksReader<R> {
                 if let Some(spec_ex) = self.spec_ex {
                     self.data_state = Some(DataReadingState {
                         spec_ex: spec_ex,
-                        chunk: ChunkReadingState { len: len as u64, remaining: len as u64}
+                        chunk: ChunkReadingState {
+                            len: len as u64,
+                            remaining: len as u64,
+                        },
                     });
                     Ok(Some(Chunk::Data))
                 } else {
@@ -410,7 +428,10 @@ impl<R: io::Read> ChunksReader<R> {
             _ => {
                 let reader = EmbeddedReader {
                     reader: &mut self.reader,
-                    state: ChunkReadingState { len: len as u64, remaining: len as u64 }
+                    state: ChunkReadingState {
+                        len: len as u64,
+                        remaining: len as u64,
+                    },
                 };
                 Ok(Some(Chunk::Unknown(kind_str, reader)))
             }
@@ -424,9 +445,9 @@ impl<R: io::Read> ChunksReader<R> {
     /// Returns true if a data chunk has been found.  Afterwards, the reader
     /// will be positioned at the first content byte of the data chunk.
     pub fn read_until_data(&mut self) -> Result<bool> {
-        while let Some(chunk) = try!(self.next()) {
+        while let Some(chunk) = self.next()? {
             if let Chunk::Data = chunk {
-                return Ok(true)
+                return Ok(true);
             }
         }
         Ok(false)
@@ -479,12 +500,12 @@ impl<R: io::Read> ChunksReader<R> {
         // is misleading though, because it is the number of bits used to store
         // a sample, not all of the bits need to be valid for all versions of
         // the WAVE format.)
-        let format_tag = try!(self.reader.read_le_u16());
-        let n_channels = try!(self.reader.read_le_u16());
-        let n_samples_per_sec = try!(self.reader.read_le_u32());
-        let n_bytes_per_sec = try!(self.reader.read_le_u32());
-        let block_align = try!(self.reader.read_le_u16());
-        let bits_per_sample = try!(self.reader.read_le_u16());
+        let format_tag = self.reader.read_le_u16()?;
+        let n_channels = self.reader.read_le_u16()?;
+        let n_samples_per_sec = self.reader.read_le_u32()?;
+        let n_bytes_per_sec = self.reader.read_le_u32()?;
+        let block_align = self.reader.read_le_u16()?;
+        let bits_per_sample = self.reader.read_le_u16()?;
 
         if n_channels == 0 {
             return Err(Error::FormatError("file contains zero channels"));
@@ -530,10 +551,10 @@ impl<R: io::Read> ChunksReader<R> {
         const EXTENSIBLE: u16 = 0xfffe;
         // We may update our WavSpec based on more data we read from the header.
         match format_tag {
-            PCM => try!(self.read_wave_format_pcm(chunk_len, &spec)),
+            PCM => self.read_wave_format_pcm(chunk_len, &spec)?,
             ADPCM => return Err(Error::Unsupported),
-            IEEE_FLOAT => try!(self.read_wave_format_ieee_float(chunk_len, &mut spec)),
-            EXTENSIBLE => try!(self.read_wave_format_extensible(chunk_len, &mut spec)),
+            IEEE_FLOAT => self.read_wave_format_ieee_float(chunk_len, &mut spec)?,
+            EXTENSIBLE => self.read_wave_format_extensible(chunk_len, &mut spec)?,
             _ => return Err(Error::Unsupported),
         };
 
@@ -560,7 +581,7 @@ impl<R: io::Read> ChunksReader<R> {
             // additional data. However, for WAVE_FORMAT_PCM, the member should
             // be ignored, see https://msdn.microsoft.com/en-us/library/ms713497.aspx.
             // Nonzero values do in fact occur in practice.
-            let _cb_size = try!(self.reader.read_le_u16());
+            let _cb_size = self.reader.read_le_u16()?;
 
             // For WAVE_FORMAT_PCM in WAVEFORMATEX, only 8 or 16 bits per
             // sample are valid according to
@@ -578,7 +599,7 @@ impl<R: io::Read> ChunksReader<R> {
 
         // If the chunk len was longer than expected, ignore the additional bytes.
         if chunk_len == 40 {
-            try!(self.reader.skip_bytes(22));
+            self.reader.skip_bytes(22)?;
         }
         Ok(())
     }
@@ -595,7 +616,7 @@ impl<R: io::Read> ChunksReader<R> {
         if is_wave_format_ex {
             // For WAVE_FORMAT_IEEE_FLOAT which we are reading, there should
             // be no extra data, so `cbSize` should be 0.
-            let cb_size = try!(self.reader.read_le_u16());
+            let cb_size = self.reader.read_le_u16()?;
             if cb_size != 0 {
                 return Err(Error::FormatError("unexpected WAVEFORMATEX size"));
             }
@@ -624,7 +645,7 @@ impl<R: io::Read> ChunksReader<R> {
         }
 
         // `cbSize` is the last field of the WAVEFORMATEX struct.
-        let cb_size = try!(self.reader.read_le_u16());
+        let cb_size = self.reader.read_le_u16()?;
 
         // `cbSize` must be at least 22, but in this case we assume that it is
         // 22, because we would not know how to handle extra data anyway.
@@ -646,10 +667,10 @@ impl<R: io::Read> ChunksReader<R> {
         //   GUID    SubFormat;
         // } WAVEFORMATEXTENSIBLE, *PWAVEFORMATEXTENSIBLE;
         // ```
-        let valid_bits_per_sample = try!(self.reader.read_le_u16());
-        let _channel_mask = try!(self.reader.read_le_u32()); // Not used for now.
+        let valid_bits_per_sample = self.reader.read_le_u16()?;
+        let _channel_mask = self.reader.read_le_u32()?; // Not used for now.
         let mut subformat = [0u8; 16];
-        try!(self.reader.read_into(&mut subformat));
+        self.reader.read_into(&mut subformat)?;
 
         // Several GUIDS are defined. At the moment, only the following are supported:
         //
@@ -689,18 +710,20 @@ impl<R: io::Read> ChunksReader<R> {
     ///
     /// This method requires that the inner reader `R` implements `Seek`.
     pub fn seek(&mut self, time: u32) -> io::Result<()>
-        where R: io::Seek,
+    where
+        R: io::Seek,
     {
         let data = self.data_state.as_mut().expect("Not in the data chunk.");
         let wanted_sample = time as i64 * data.spec_ex.spec.channels as i64;
         let wanted_byte = wanted_sample * data.spec_ex.bytes_per_sample as i64;
-        try!(data.chunk.seek(&mut self.reader, io::SeekFrom::Start(wanted_byte as u64)));
+        data.chunk
+            .seek(&mut self.reader, io::SeekFrom::Start(wanted_byte as u64))?;
         Ok(())
     }
 }
 
 impl<R: io::Read> io::Read for ChunksReader<R> {
-    fn read(&mut self, buffer: &mut[u8]) -> io::Result<usize> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
         let data = self.data_state.as_mut().expect("Not in the data chunk.");
         data.chunk.read(&mut self.reader, buffer)
     }
@@ -738,7 +761,8 @@ pub struct WavReader<R: io::Read> {
 /// The type `S` must have at least as many bits as the bits per sample of the
 /// file, otherwise every iteration will return an error.
 pub struct WavSamples<'wr, R, S>
-    where R: io::Read + 'wr
+where
+    R: io::Read + 'wr,
 {
     reader: &'wr mut ChunksReader<R>,
     phantom_sample: marker::PhantomData<S>,
@@ -767,14 +791,14 @@ pub fn read_wave_header<R: io::Read>(reader: &mut R) -> Result<u64> {
     // into it is more cumbersome, but also avoids a heap allocation. Is
     // the compiler smart enough to avoid the heap allocation anyway? I
     // would not expect it to be.
-    if b"RIFF" != &try!(reader.read_4_bytes())[..] {
+    if b"RIFF" != &reader.read_4_bytes()?[..] {
         return Err(Error::FormatError("no RIFF tag found"));
     }
 
-    let file_len = try!(reader.read_le_u32());
+    let file_len = reader.read_le_u32()?;
 
     // Next four bytes indicate the file type, which should be WAVE.
-    if b"WAVE" != &try!(reader.read_4_bytes())[..] {
+    if b"WAVE" != &reader.read_4_bytes()?[..] {
         return Err(Error::FormatError("no WAVE tag found"));
     }
 
@@ -784,26 +808,26 @@ pub fn read_wave_header<R: io::Read>(reader: &mut R) -> Result<u64> {
 }
 
 impl<R> WavReader<R>
-    where R: io::Read
+where
+    R: io::Read,
 {
     /// Attempts to create a reader that reads the WAVE format.
     ///
     /// The header is read immediately. Reading the data will be done on
     /// demand.
     pub fn new(reader: R) -> Result<WavReader<R>> {
-        let mut reader = try!(ChunksReader::new(reader));
-        try!(reader.read_until_data());
+        let mut reader = ChunksReader::new(reader)?;
+        reader.read_until_data()?;
         if reader.spec_ex.is_none() {
-            return Err(Error::FormatError("Wave file with no fmt header"))
+            return Err(Error::FormatError("Wave file with no fmt header"));
         }
-        Ok(WavReader {
-            reader: reader,
-        })
+        Ok(WavReader { reader: reader })
     }
 
     /// Returns information about the WAVE file.
     pub fn spec(&self) -> WavSpec {
-        self.reader.spec_ex
+        self.reader
+            .spec_ex
             .expect("Using a WavReader wrapping a ChunkReader with no spec")
             .spec
     }
@@ -872,7 +896,8 @@ impl<R> WavReader<R>
     ///
     /// This method requires that the inner reader `R` implements `Seek`.
     pub fn seek(&mut self, time: u32) -> io::Result<()>
-        where R: io::Seek,
+    where
+        R: io::Seek,
     {
         self.reader.seek(time)
     }
@@ -884,22 +909,25 @@ impl WavReader<io::BufReader<fs::File>> {
     /// This is a convenience constructor that opens a `File`, wraps it in a
     /// `BufReader` and then constructs a `WavReader` from it.
     pub fn open<P: AsRef<path::Path>>(filename: P) -> Result<WavReader<io::BufReader<fs::File>>> {
-        let file = try!(fs::File::open(filename));
+        let file = fs::File::open(filename)?;
         let buf_reader = io::BufReader::new(file);
         WavReader::new(buf_reader)
     }
 }
 
 fn iter_next<R, S>(reader: &mut ChunksReader<R>) -> Option<Result<S>>
-    where R: io::Read,
-          S: Sample
+where
+    R: io::Read,
+    S: Sample,
 {
     let data = reader.data_state.expect("reader not in data chunk");
     if data.chunk.remaining > 0 {
-        let sample = Sample::read(reader,
-                                  data.spec_ex.spec.sample_format,
-                                  data.spec_ex.bytes_per_sample,
-                                  data.spec_ex.spec.bits_per_sample);
+        let sample = Sample::read(
+            reader,
+            data.spec_ex.spec.sample_format,
+            data.spec_ex.bytes_per_sample,
+            data.spec_ex.spec.bits_per_sample,
+        );
         Some(sample.map_err(Error::from))
     } else {
         None
@@ -913,8 +941,9 @@ fn iter_size_hint<R: io::Read>(reader: &ChunksReader<R>) -> (usize, Option<usize
 }
 
 impl<'wr, R, S> Iterator for WavSamples<'wr, R, S>
-    where R: io::Read,
-          S: Sample
+where
+    R: io::Read,
+    S: Sample,
 {
     type Item = Result<S>;
 
@@ -928,14 +957,16 @@ impl<'wr, R, S> Iterator for WavSamples<'wr, R, S>
 }
 
 impl<'wr, R, S> ExactSizeIterator for WavSamples<'wr, R, S>
-    where R: io::Read,
-          S: Sample
+where
+    R: io::Read,
+    S: Sample,
 {
 }
 
 impl<R, S> Iterator for WavIntoSamples<R, S>
-    where R: io::Read,
-          S: Sample
+where
+    R: io::Read,
+    S: Sample,
 {
     type Item = Result<S>;
 
@@ -949,38 +980,41 @@ impl<R, S> Iterator for WavIntoSamples<R, S>
 }
 
 impl<R, S> ExactSizeIterator for WavIntoSamples<R, S>
-    where R: io::Read,
-          S: Sample
+where
+    R: io::Read,
+    S: Sample,
 {
 }
 
 #[test]
 fn duration_and_len_agree() {
-    let files = &["testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
-                  "testsamples/waveformatex-16bit-44100Hz-stereo.wav",
-                  "testsamples/waveformatextensible-32bit-48kHz-stereo.wav"];
+    let files = &[
+        "testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
+        "testsamples/waveformatex-16bit-44100Hz-stereo.wav",
+        "testsamples/waveformatextensible-32bit-48kHz-stereo.wav",
+    ];
 
     for fname in files {
         let reader = WavReader::open(fname).unwrap();
-        assert_eq!(reader.spec().channels as u32 * reader.duration(),
-                   reader.len());
+        assert_eq!(
+            reader.spec().channels as u32 * reader.duration(),
+            reader.len()
+        );
     }
 }
 
 /// Tests reading a wave file with the PCMWAVEFORMAT struct.
 #[test]
 fn read_wav_pcm_wave_format_pcm() {
-    let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav")
-        .unwrap();
+    let mut wav_reader =
+        WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav").unwrap();
 
     assert_eq!(wav_reader.spec().channels, 1);
     assert_eq!(wav_reader.spec().sample_rate, 44100);
     assert_eq!(wav_reader.spec().bits_per_sample, 16);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
-    let samples: Vec<i16> = wav_reader.samples()
-        .map(|r| r.unwrap())
-        .collect();
+    let samples: Vec<i16> = wav_reader.samples().map(|r| r.unwrap()).collect();
 
     // The test file has been prepared with these exact four samples.
     assert_eq!(&samples[..], &[2, -3, 5, -7]);
@@ -990,8 +1024,10 @@ fn read_wav_pcm_wave_format_pcm() {
 fn read_wav_skips_unknown_chunks() {
     // The test samples are the same as without the -extra suffix, but ffmpeg
     // has kindly added some useless chunks in between the fmt and data chunk.
-    let files = ["testsamples/pcmwaveformat-16bit-44100Hz-mono-extra.wav",
-                 "testsamples/waveformatex-16bit-44100Hz-mono-extra.wav"];
+    let files = [
+        "testsamples/pcmwaveformat-16bit-44100Hz-mono-extra.wav",
+        "testsamples/waveformatex-16bit-44100Hz-mono-extra.wav",
+    ];
 
     for file in &files {
         let mut wav_reader = WavReader::open(file).unwrap();
@@ -1008,17 +1044,14 @@ fn read_wav_skips_unknown_chunks() {
 
 #[test]
 fn read_wav_0_valid_bits_fallback() {
-    let mut wav_reader = WavReader::open("testsamples/nonstandard-02.wav")
-        .unwrap();
+    let mut wav_reader = WavReader::open("testsamples/nonstandard-02.wav").unwrap();
 
     assert_eq!(wav_reader.spec().channels, 2);
     assert_eq!(wav_reader.spec().sample_rate, 48000);
     assert_eq!(wav_reader.spec().bits_per_sample, 32);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
-    let samples: Vec<i32> = wav_reader.samples()
-        .map(|r| r.unwrap())
-        .collect();
+    let samples: Vec<i32> = wav_reader.samples().map(|r| r.unwrap()).collect();
 
     // The test file has been prepared with these exact four samples.
     assert_eq!(&samples[..], &[19, -229373, 33587161, -2147483497]);
@@ -1026,8 +1059,8 @@ fn read_wav_0_valid_bits_fallback() {
 
 #[test]
 fn len_and_size_hint_are_correct() {
-    let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav")
-        .unwrap();
+    let mut wav_reader =
+        WavReader::open("testsamples/pcmwaveformat-16bit-44100Hz-mono.wav").unwrap();
 
     assert_eq!(wav_reader.len(), 4);
 
@@ -1054,9 +1087,11 @@ fn len_and_size_hint_are_correct() {
 
 #[test]
 fn size_hint_is_exact() {
-    let files = &["testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
-                  "testsamples/waveformatex-16bit-44100Hz-stereo.wav",
-                  "testsamples/waveformatextensible-32bit-48kHz-stereo.wav"];
+    let files = &[
+        "testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
+        "testsamples/waveformatex-16bit-44100Hz-stereo.wav",
+        "testsamples/waveformatextensible-32bit-48kHz-stereo.wav",
+    ];
 
     for fname in files {
         let mut reader = WavReader::open(fname).unwrap();
@@ -1073,16 +1108,14 @@ fn size_hint_is_exact() {
 
 #[test]
 fn samples_equals_into_samples() {
-    let wav_reader_val = WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav").unwrap();
-    let mut wav_reader_ref = WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav").unwrap();
+    let wav_reader_val =
+        WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav").unwrap();
+    let mut wav_reader_ref =
+        WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav").unwrap();
 
-    let samples_val: Vec<i16> = wav_reader_val.into_samples()
-                                              .map(|r| r.unwrap())
-                                              .collect();
+    let samples_val: Vec<i16> = wav_reader_val.into_samples().map(|r| r.unwrap()).collect();
 
-    let samples_ref: Vec<i16> = wav_reader_ref.samples()
-                                              .map(|r| r.unwrap())
-                                              .collect();
+    let samples_ref: Vec<i16> = wav_reader_ref.samples().map(|r| r.unwrap()).collect();
 
     assert_eq!(samples_val, samples_ref);
 }
@@ -1090,17 +1123,15 @@ fn samples_equals_into_samples() {
 /// Tests reading a wave file with the WAVEFORMATEX struct.
 #[test]
 fn read_wav_wave_format_ex_pcm() {
-    let mut wav_reader = WavReader::open("testsamples/waveformatex-16bit-44100Hz-mono.wav")
-        .unwrap();
+    let mut wav_reader =
+        WavReader::open("testsamples/waveformatex-16bit-44100Hz-mono.wav").unwrap();
 
     assert_eq!(wav_reader.spec().channels, 1);
     assert_eq!(wav_reader.spec().sample_rate, 44100);
     assert_eq!(wav_reader.spec().bits_per_sample, 16);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
-    let samples: Vec<i16> = wav_reader.samples()
-                                      .map(|r| r.unwrap())
-                                      .collect();
+    let samples: Vec<i16> = wav_reader.samples().map(|r| r.unwrap()).collect();
 
     // The test file has been prepared with these exact four samples.
     assert_eq!(&samples[..], &[2, -3, 5, -7]);
@@ -1108,17 +1139,15 @@ fn read_wav_wave_format_ex_pcm() {
 
 #[test]
 fn read_wav_wave_format_ex_ieee_float() {
-    let mut wav_reader = WavReader::open("testsamples/waveformatex-ieeefloat-44100Hz-mono.wav")
-        .unwrap();
+    let mut wav_reader =
+        WavReader::open("testsamples/waveformatex-ieeefloat-44100Hz-mono.wav").unwrap();
 
     assert_eq!(wav_reader.spec().channels, 1);
     assert_eq!(wav_reader.spec().sample_rate, 44100);
     assert_eq!(wav_reader.spec().bits_per_sample, 32);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Float);
 
-    let samples: Vec<f32> = wav_reader.samples()
-                                      .map(|r| r.unwrap())
-                                      .collect();
+    let samples: Vec<f32> = wav_reader.samples().map(|r| r.unwrap()).collect();
 
     // The test file has been prepared with these exact four samples.
     assert_eq!(&samples[..], &[2.0, 3.0, -16411.0, 1019.0]);
@@ -1126,35 +1155,30 @@ fn read_wav_wave_format_ex_ieee_float() {
 
 #[test]
 fn read_wav_stereo() {
-    let mut wav_reader = WavReader::open("testsamples/waveformatex-16bit-44100Hz-stereo.wav")
-        .unwrap();
+    let mut wav_reader =
+        WavReader::open("testsamples/waveformatex-16bit-44100Hz-stereo.wav").unwrap();
 
     assert_eq!(wav_reader.spec().channels, 2);
     assert_eq!(wav_reader.spec().sample_rate, 44100);
     assert_eq!(wav_reader.spec().bits_per_sample, 16);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
-    let samples: Vec<i16> = wav_reader.samples()
-                                      .map(|r| r.unwrap())
-                                      .collect();
+    let samples: Vec<i16> = wav_reader.samples().map(|r| r.unwrap()).collect();
 
     // The test file has been prepared with these exact eight samples.
     assert_eq!(&samples[..], &[2, -3, 5, -7, 11, -13, 17, -19]);
-
 }
 
 #[test]
 fn read_wav_pcm_wave_format_8bit() {
-    let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav")
-                                   .unwrap();
+    let mut wav_reader =
+        WavReader::open("testsamples/pcmwaveformat-8bit-44100Hz-mono.wav").unwrap();
 
     assert_eq!(wav_reader.spec().channels, 1);
     assert_eq!(wav_reader.spec().bits_per_sample, 8);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
-    let samples: Vec<i16> = wav_reader.samples()
-                                      .map(|r| r.unwrap())
-                                      .collect();
+    let samples: Vec<i16> = wav_reader.samples().map(|r| r.unwrap()).collect();
 
     // The test file has been prepared with these exact four samples.
     assert_eq!(&samples[..], &[19, -53, 89, -127]);
@@ -1165,17 +1189,15 @@ fn read_wav_pcm_wave_format_8bit() {
 /// 'arecord -f S24_LE -r 48000 -c 2 input.wav' so it should be supported.
 #[test]
 fn read_wav_pcm_wave_format_24bit_4byte() {
-    let mut wav_reader = WavReader::open("testsamples/pcmwaveformat-24bit-4byte-48kHz-stereo.wav")
-        .unwrap();
+    let mut wav_reader =
+        WavReader::open("testsamples/pcmwaveformat-24bit-4byte-48kHz-stereo.wav").unwrap();
 
     assert_eq!(wav_reader.spec().channels, 2);
     assert_eq!(wav_reader.spec().sample_rate, 48_000);
     assert_eq!(wav_reader.spec().bits_per_sample, 24);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
-    let samples: Vec<i32> = wav_reader.samples()
-                                      .map(|r| r.unwrap())
-                                      .collect();
+    let samples: Vec<i32> = wav_reader.samples().map(|r| r.unwrap()).collect();
 
     // The test file has been prepared with these exact four samples.
     assert_eq!(&samples[..], &[-96, 23_052, 8_388_607, -8_360_672]);
@@ -1190,9 +1212,7 @@ fn read_wav_wave_format_ex_8bit() {
     assert_eq!(wav_reader.spec().bits_per_sample, 8);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
-    let samples: Vec<i32> = wav_reader.samples()
-                                      .map(|r| r.unwrap())
-                                      .collect();
+    let samples: Vec<i32> = wav_reader.samples().map(|r| r.unwrap()).collect();
 
     // The audio data has been zeroed out, but for 8-bit files, a zero means a
     // sample value of 128.
@@ -1202,17 +1222,15 @@ fn read_wav_wave_format_ex_8bit() {
 /// This test sample tests both reading the WAVEFORMATEXTENSIBLE header, and 24-bit samples.
 #[test]
 fn read_wav_wave_format_extensible_pcm_24bit() {
-    let mut wav_reader = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
-        .unwrap();
+    let mut wav_reader =
+        WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav").unwrap();
 
     assert_eq!(wav_reader.spec().channels, 1);
     assert_eq!(wav_reader.spec().sample_rate, 192_000);
     assert_eq!(wav_reader.spec().bits_per_sample, 24);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
-    let samples: Vec<i32> = wav_reader.samples()
-                                      .map(|r| r.unwrap())
-                                      .collect();
+    let samples: Vec<i32> = wav_reader.samples().map(|r| r.unwrap()).collect();
 
     // The test file has been prepared with these exact four samples.
     assert_eq!(&samples[..], &[-17, 4_194_319, -6_291_437, 8_355_817]);
@@ -1222,17 +1240,15 @@ fn read_wav_wave_format_extensible_pcm_24bit() {
 /// 4 byte container size.
 #[test]
 fn read_wav_wave_format_extensible_pcm_24bit_4byte() {
-    let mut wav_reader = WavReader::open("testsamples/waveformatextensible-24bit-4byte-48kHz-stereo.wav")
-        .unwrap();
+    let mut wav_reader =
+        WavReader::open("testsamples/waveformatextensible-24bit-4byte-48kHz-stereo.wav").unwrap();
 
     assert_eq!(wav_reader.spec().channels, 2);
     assert_eq!(wav_reader.spec().sample_rate, 48_000);
     assert_eq!(wav_reader.spec().bits_per_sample, 24);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
-    let samples: Vec<i32> = wav_reader.samples()
-                                      .map(|r| r.unwrap())
-                                      .collect();
+    let samples: Vec<i32> = wav_reader.samples().map(|r| r.unwrap()).collect();
 
     // The test file has been prepared with these exact four samples.
     assert_eq!(&samples[..], &[-96, 23_052, 8_388_607, -8_360_672]);
@@ -1240,15 +1256,13 @@ fn read_wav_wave_format_extensible_pcm_24bit_4byte() {
 
 #[test]
 fn read_wav_32bit() {
-    let mut wav_reader = WavReader::open("testsamples/waveformatextensible-32bit-48kHz-stereo.wav")
-                                   .unwrap();
+    let mut wav_reader =
+        WavReader::open("testsamples/waveformatextensible-32bit-48kHz-stereo.wav").unwrap();
 
     assert_eq!(wav_reader.spec().bits_per_sample, 32);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
-    let samples: Vec<i32> = wav_reader.samples()
-                                      .map(|r| r.unwrap())
-                                      .collect();
+    let samples: Vec<i32> = wav_reader.samples().map(|r| r.unwrap()).collect();
 
     // The test file has been prepared with these exact four samples.
     assert_eq!(&samples[..], &[19, -229_373, 33_587_161, -2_147_483_497]);
@@ -1264,9 +1278,7 @@ fn read_wav_wave_format_extensible_ieee_float() {
     assert_eq!(wav_reader.spec().bits_per_sample, 32);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Float);
 
-    let samples: Vec<f32> = wav_reader.samples()
-                                      .map(|r| r.unwrap())
-                                      .collect();
+    let samples: Vec<f32> = wav_reader.samples().map(|r| r.unwrap()).collect();
 
     // The test file has been prepared with these exact four samples.
     assert_eq!(&samples[..], &[2.0, 3.0, -16411.0, 1019.0]);
@@ -1288,17 +1300,15 @@ fn read_wav_nonstandard_01() {
     assert_eq!(wav_reader.spec().bits_per_sample, 24);
     assert_eq!(wav_reader.spec().sample_format, SampleFormat::Int);
 
-    let samples: Vec<i32> = wav_reader.samples()
-                                      .map(|r| r.unwrap())
-                                      .collect();
+    let samples: Vec<i32> = wav_reader.samples().map(|r| r.unwrap()).collect();
 
     assert_eq!(&samples[..], &[0, 0]);
 }
 
 #[test]
 fn wide_read_should_signal_error() {
-    let mut reader24 = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
-        .unwrap();
+    let mut reader24 =
+        WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav").unwrap();
 
     // Even though we know the first value is 17, and it should fit in an `i8`,
     // a general 24-bit sample will not fit in an `i8`, so this should fail.
@@ -1308,8 +1318,8 @@ fn wide_read_should_signal_error() {
     assert!(reader24.samples::<i32>().next().unwrap().is_ok());
     assert!(reader24.samples::<f32>().next().unwrap().is_ok());
 
-    let mut reader32 = WavReader::open("testsamples/waveformatextensible-32bit-48kHz-stereo.wav")
-        .unwrap();
+    let mut reader32 =
+        WavReader::open("testsamples/waveformatextensible-32bit-48kHz-stereo.wav").unwrap();
 
     // In general, 32-bit samples will not fit in anything but an `i32`.
     assert!(reader32.samples::<i8>().next().unwrap().is_err());
@@ -1320,8 +1330,8 @@ fn wide_read_should_signal_error() {
 
 #[test]
 fn sample_format_mismatch_should_signal_error() {
-    let mut reader_f32 = WavReader::open("testsamples/waveformatex-ieeefloat-44100Hz-mono.wav")
-        .unwrap();
+    let mut reader_f32 =
+        WavReader::open("testsamples/waveformatex-ieeefloat-44100Hz-mono.wav").unwrap();
 
     assert!(reader_f32.samples::<i8>().next().unwrap().is_err());
     assert!(reader_f32.samples::<i16>().next().unwrap().is_err());
@@ -1368,16 +1378,18 @@ fn read_as_i32_should_equal_read_as_f32() {
         assert_eq!(sample_i32 as f32, sample_f32);
     }
 
-    let samples_i32: Vec<i32> = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
-        .unwrap()
-        .samples::<i32>()
-        .map(Result::unwrap)
-        .collect();
-    let samples_f32: Vec<f32> = WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
-        .unwrap()
-        .samples::<f32>()
-        .map(Result::unwrap)
-        .collect();
+    let samples_i32: Vec<i32> =
+        WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
+            .unwrap()
+            .samples::<i32>()
+            .map(Result::unwrap)
+            .collect();
+    let samples_f32: Vec<f32> =
+        WavReader::open("testsamples/waveformatextensible-24bit-192kHz-mono.wav")
+            .unwrap()
+            .samples::<f32>()
+            .map(Result::unwrap)
+            .collect();
     for (&sample_i32, &sample_f32) in samples_i32.iter().zip(&samples_f32) {
         assert_eq!(sample_i32, sample_f32 as i32);
         assert_eq!(sample_i32 as f32, sample_f32);
@@ -1386,19 +1398,22 @@ fn read_as_i32_should_equal_read_as_f32() {
 
 #[test]
 fn fuzz_crashes_should_be_fixed() {
-    use std::fs;
     use std::ffi::OsStr;
+    use std::fs;
 
     // This is a regression test: all crashes and other issues found through
     // fuzzing should not cause a crash.
-    let dir = fs::read_dir("testsamples/fuzz").ok()
-                 .expect("failed to enumerate fuzz test corpus");
+    let dir = fs::read_dir("testsamples/fuzz")
+        .ok()
+        .expect("failed to enumerate fuzz test corpus");
     for path in dir {
         let path = path.ok().expect("failed to obtain path info").path();
         let is_file = fs::metadata(&path).unwrap().file_type().is_file();
         if is_file && path.extension() == Some(OsStr::new("wav")) {
-            println!("    testing {} ...", path.to_str()
-                                               .expect("unsupported filename"));
+            println!(
+                "    testing {} ...",
+                path.to_str().expect("unsupported filename")
+            );
             let mut reader = match WavReader::open(path) {
                 Ok(r) => r,
                 Err(..) => continue,
@@ -1407,7 +1422,7 @@ fn fuzz_crashes_should_be_fixed() {
                 SampleFormat::Int => {
                     for sample in reader.samples::<i32>() {
                         match sample {
-                            Ok(..) => { }
+                            Ok(..) => {}
                             Err(..) => break,
                         }
                     }
@@ -1415,7 +1430,7 @@ fn fuzz_crashes_should_be_fixed() {
                 SampleFormat::Float => {
                     for sample in reader.samples::<f32>() {
                         match sample {
-                            Ok(..) => { }
+                            Ok(..) => {}
                             Err(..) => break,
                         }
                     }
@@ -1427,9 +1442,11 @@ fn fuzz_crashes_should_be_fixed() {
 
 #[test]
 fn seek_is_consistent() {
-    let files = &["testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
-                  "testsamples/waveformatex-16bit-44100Hz-stereo.wav",
-                  "testsamples/waveformatextensible-32bit-48kHz-stereo.wav"];
+    let files = &[
+        "testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
+        "testsamples/waveformatex-16bit-44100Hz-stereo.wav",
+        "testsamples/waveformatextensible-32bit-48kHz-stereo.wav",
+    ];
     for fname in files {
         let mut reader = WavReader::open(fname).unwrap();
         // Seeking back to the start should "reset" the reader.
