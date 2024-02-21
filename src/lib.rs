@@ -966,7 +966,7 @@ fn write_read_chunks_is_lossless() {
         let value = &b"12345"[..len];
         let mut buffer = io::Cursor::new(vec);
         {
-            let mut writer = ::write::ChunksWriter::new(&mut buffer).unwrap();
+            let mut writer = crate::write::ChunksWriter::new(&mut buffer).unwrap();
             writer.write_fmt(write_spec).unwrap();
             writer
                 .start_chunk(*b"houn")
