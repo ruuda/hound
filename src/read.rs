@@ -29,8 +29,8 @@ pub trait ReadExt: io::Read {
     //  TODO: There is an RFC proposing a method like this for the standard library.
     fn read_into(&mut self, buf: &mut [u8]) -> io::Result<()>;
 
-    /// Reads `n` bytes and returns them in a vector.
-    fn read_bytes(&mut self, n: usize) -> io::Result<Vec<u8>>;
+    /// Reads 4 bytes and returns them in an array.
+    fn read_4_bytes(&mut self) -> io::Result<[u8; 4]>;
 
     /// Skip over `n` bytes.
     fn skip_bytes(&mut self, n: usize) -> io::Result<()>;
@@ -110,13 +110,8 @@ impl<R> ReadExt for R
     }
 
     #[inline(always)]
-    fn read_bytes(&mut self, n: usize) -> io::Result<Vec<u8>> {
-        // We allocate a runtime fixed size buffer, and we are going to read
-        // into it, so zeroing or filling the buffer is a waste. This method
-        // is safe, because the contents of the buffer are only exposed when
-        // they have been overwritten completely by the read.
-        let mut buf = Vec::with_capacity(n);
-        unsafe { buf.set_len(n); }
+    fn read_4_bytes(&mut self) -> io::Result<[u8; 4]> {
+        let mut buf = [0_u8; 4];
         try!(self.read_into(&mut buf[..]));
         Ok(buf)
     }
@@ -192,8 +187,10 @@ impl<R> ReadExt for R
     }
 
     #[inline(always)]
-    fn read_le_f32(&mut self) -> io::Result<f32> {
-        self.read_le_u32().map(|u| unsafe { mem::transmute(u) })
+    fn read_le_f32(&mut self) -> io::Result<f32> {    
+        let mut buf = [0u8; 4];
+        try!(self.read_into(&mut buf));
+        Ok(f32::from_le_bytes(buf))
     }
 }
 
@@ -661,6 +658,9 @@ impl<R: io::Read> ChunksReader<R> {
         let sample_format = match subformat {
             super::KSDATAFORMAT_SUBTYPE_PCM => SampleFormat::Int,
             super::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT => SampleFormat::Float,
+            // TODO: Add a way to distinguish those from linear PCM.
+            super::KSDATAFORMAT_SUBTYPE_AMBISONIC_B_FORMAT_PCM => SampleFormat::Int,
+            super::KSDATAFORMAT_SUBTYPE_AMBISONIC_B_FORMAT_IEEE_FLOAT => SampleFormat::Float,
             _ => return Err(Error::Unsupported),
         };
 
@@ -767,14 +767,14 @@ pub fn read_wave_header<R: io::Read>(reader: &mut R) -> Result<u64> {
     // into it is more cumbersome, but also avoids a heap allocation. Is
     // the compiler smart enough to avoid the heap allocation anyway? I
     // would not expect it to be.
-    if b"RIFF" != &try!(reader.read_bytes(4))[..] {
+    if b"RIFF" != &try!(reader.read_4_bytes())[..] {
         return Err(Error::FormatError("no RIFF tag found"));
     }
 
     let file_len = try!(reader.read_le_u32());
 
     // Next four bytes indicate the file type, which should be WAVE.
-    if b"WAVE" != &try!(reader.read_bytes(4))[..] {
+    if b"WAVE" != &try!(reader.read_4_bytes())[..] {
         return Err(Error::FormatError("no WAVE tag found"));
     }
 

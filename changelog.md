@@ -1,6 +1,74 @@
 Changelog
 =========
 
+3.5.1
+-----
+
+Released 2023-09-25.
+
+**Compatibility**:
+
+ * Ensures compatibility with Rust 1.40.0 through 1.72.1. This bumps the minimum
+   supported Rust version from 1.16 to 1.40.
+
+Changes:
+
+ * Soundness: Wrap writes to uninitialized memory in `mem::MaybeUninit`. The
+   unsoundness was present in all versions since 0.2.0. There is no evidence
+   that rustc took advantage of the unsoundness to compile programs in a
+   problematic way. ([#58][58], [#68][68])
+
+Thanks to Cam Lloyd for originally contributing these changes, and thanks to
+Maxwell McKinnon for rebasing them on top of 3.5.0.
+
+[58]: https://github.com/ruuda/hound/pull/58
+[68]: https://github.com/ruuda/hound/pull/68
+
+3.5.0
+-----
+
+Release date 2022-09-09.
+
+This is a maintenance release that includes most of the bugfixes and features
+that have been contributed since 3.4.0, which could be cherry-picked on top of
+3.4.0. Some other contributions with more far-reaching changes remain unreleased
+as of yet.
+
+**Compatibility**:
+
+ * Ensures compatibility with Rust 1.16 through 1.63 stable. Previously the
+   minimum supported Rust version was 1.4. Cargo from 1.4 is no longer
+   compatible with the current crates.io registry, and Rustup fails signature
+   verification for these binaries, so it is infeasible to continue to support
+   it.
+
+New features:
+
+ * Add support for `S24_LE` files, which store 24 bits in 4 bytes ([#40][40],
+   [#41][41])
+ * Add `WavWriter::new_with_spec_ex` ([#42][42])
+ * Add `WavSpec::into_header_for_infinite_file` ([#33][33], [#36][36])
+
+Bugfixes and compatibility improvements:
+
+ * Handle files that have the `wValidBitsPerSample` field set to zero
+   ([#50][50], [#51][51])
+ * Avoid overflow in the channel mask when writing file with more than 32
+   channels ([#59][59], [#60][60])
+
+[33]: https://github.com/ruuda/hound/pull/33
+[36]: https://github.com/ruuda/hound/pull/36
+[40]: https://github.com/ruuda/hound/pull/40
+[41]: https://github.com/ruuda/hound/pull/41
+[42]: https://github.com/ruuda/hound/pull/42
+[50]: https://github.com/ruuda/hound/pull/50
+[51]: https://github.com/ruuda/hound/pull/51
+[59]: https://github.com/ruuda/hound/pull/59
+[60]: https://github.com/ruuda/hound/pull/60
+
+Many thanks to Diffuse, Fletcher Woodruff, Matt Wilkinson, Vitaly Vi Shukela,
+and Tuckerrrrrrrrrr for contributing to this release.
+
 3.4.0
 -----
 

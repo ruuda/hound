@@ -12,9 +12,6 @@ homepage = "https://github.com/ruuda/hound"
 repository = "https://github.com/ruuda/hound"
 documentation = "https://docs.rs/hound"
 
-[badges]
-travis-ci = { repository = "ruuda/hound", branch = "v3.4.0" }
-
 [dev-dependencies]
 # An older version of cpal, but newer versions depend on the futures library,
 # which is incompatible with the version of Rust that Hound guarantees to

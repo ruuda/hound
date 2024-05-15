@@ -14,6 +14,7 @@ use std::fs;
 use std::io;
 use std::mem;
 use std::io::{Seek, Write};
+use std::mem::MaybeUninit;
 use std::path;
 use super::{Error, Result, Sample, SampleFormat, WavSpec};
 use ::read;
@@ -115,14 +116,20 @@ impl<W> WriteExt for W
 
     #[inline(always)]
     fn write_le_f32(&mut self, x: f32) -> io::Result<()> {
-        let u = unsafe { mem::transmute(x) };
+        let u = unsafe { mem::transmute::<f32, u32>(x) };
         self.write_le_u32(u)
     }
 }
 
 /// Generates a bitmask with `channels` ones in the least significant bits.
+///
+/// According to the [spec](https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ksmedia/ns-ksmedia-waveformatextensible#remarks),
+/// if `channels` is greater than the number of bits in the channel mask, 18 non-reserved bits,
+/// extra channels are not assigned to any physical speaker location.  In this scenario, this
+/// function will return a filled channel mask.
 fn channel_mask(channels: u16) -> u32 {
-    (0..channels).map(|c| 1 << c).fold(0, |a, c| a | c)
+    // clamp to 0-18 to stay within reserved bits
+    (0..channels.clamp(0, 18) as u32).map(|c| 1 << c).fold(0, |a, c| a | c)
 }
 
 #[test]
@@ -131,7 +138,14 @@ fn verify_channel_mask() {
     assert_eq!(channel_mask(1), 1);
     assert_eq!(channel_mask(2), 3);
     assert_eq!(channel_mask(3), 7);
-    assert_eq!(channel_mask(4), 15);
+    assert_eq!(channel_mask(4), 0xF);
+    assert_eq!(channel_mask(8), 0xFF);
+    assert_eq!(channel_mask(16), 0xFFFF);
+    // expect channels >= 18 to yield the same mask
+    assert_eq!(channel_mask(18), 0x3FFFF);
+    assert_eq!(channel_mask(32), 0x3FFFF);
+    assert_eq!(channel_mask(64), 0x3FFFF);
+    assert_eq!(channel_mask(129), 0x3FFFF);
 }
 
 enum FmtKind {
@@ -229,7 +243,7 @@ pub struct ChunksWriter<W: io::Write + io::Seek> {
     /// state of the data chunk, if currently writing it
     pub data_state: Option<ChunkWritingState>,
     pub dirty: bool,
-    pub sample_writer_buffer: Vec<u8>,
+    pub sample_writer_buffer: Vec<MaybeUninit<u8>>,
 }
 
 impl<W: io::Write + io::Seek> ChunksWriter<W> {
@@ -559,7 +573,7 @@ impl<W: io::Write + io::Seek> ChunksWriter<W> {
             // We need a bigger buffer. There is no point in growing the old
             // one, as we are going to overwrite the samples anyway, so just
             // allocate a new one.
-            let mut new_buffer = Vec::with_capacity(num_bytes);
+            let mut new_buffer = Vec::<MaybeUninit<u8>>::with_capacity(num_bytes);
 
             // The potentially garbage memory here will not be exposed: the
             // buffer is only exposed when flushing, but `flush()` asserts that
@@ -884,7 +898,7 @@ pub struct SampleWriter16<'parent, W> where W: io::Write + io::Seek + 'parent {
     writer: &'parent mut W,
 
     /// The internal buffer that samples are written to before they are flushed.
-    buffer: &'parent mut [u8],
+    buffer: &'parent mut [MaybeUninit<u8>],
 
     /// Reference to the `data_bytes_written` field of the writer.
     data_bytes_written: &'parent mut u32,
@@ -915,27 +929,18 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
         let s = sample.as_i16() as u16;
 
         // Write the sample in little endian to the buffer.
-        self.buffer[self.index as usize] = s as u8;
-        self.buffer[self.index as usize + 1] = (s >> 8) as u8;
+        self.buffer[self.index as usize].write(s as u8);
+        self.buffer[self.index as usize + 1].write((s >> 8) as u8);
 
         self.index += 2;
     }
 
-    #[cfg(target_arch = "x86_64")]
     unsafe fn write_u16_le_unchecked(&mut self, value: u16) {
-        // x86_64 is little endian, so we do not need to shuffle bytes around;
-        // we can just store the 16-bit integer in the buffer directly.
-        let ptr = self.buffer.get_unchecked_mut(self.index as usize) as *mut u8 as *mut u16;
-        *ptr = value;
-    }
+        // On little endian machines the compiler produces assembly code
+        // that merges the following two lines into a single instruction. 
 
-    #[cfg(not(target_arch = "x86_64"))]
-    unsafe fn write_u16_le_unchecked(&mut self, value: u16) {
-        // Write a sample in little-endian to the buffer, independent of the
-        // endianness of the architecture we are running on.
-        let idx = self.index as usize;
-        *self.buffer.get_unchecked_mut(idx) = value as u8;
-        *self.buffer.get_unchecked_mut(idx + 1) = (value >> 8) as u8;
+        self.buffer.get_unchecked_mut(self.index as usize).write(value as u8);
+        self.buffer.get_unchecked_mut(self.index as usize + 1).write((value >> 8) as u8);
     }
 
     /// Like `write_sample()`, but does not perform a bounds check when writing
@@ -960,7 +965,15 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
             panic!("Insufficient samples written to the sample writer.");
         }
 
-        try!(self.writer.write_all(&self.buffer));
+        // SAFETY: casting `self.buffer` to a `*const [MaybeUninit<u8>]` is safe since the caller guarantees that
+        // `self.buffer` is initialized, and `MaybeUninit<u8>` is guaranteed to have the same layout as `u8`.
+        // The pointer obtained is valid since it refers to memory owned by `self.buffer` which is a
+        // reference and thus guaranteed to be valid for reads.
+        // This is copied from the nightly implementation for slice_assume_init_ref.
+        let slice = unsafe { &*(self.buffer as *const [MaybeUninit<u8>] as *const [u8]) };
+
+        try!(self.writer.write_all(slice));
+
         *self.data_bytes_written += self.buffer.len() as u32;
         Ok(())
     }
