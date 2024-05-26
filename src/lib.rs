@@ -88,7 +88,7 @@ pub trait Sample: Sized {
     fn write_padded<W: io::Write>(self, writer: &mut W, bits: u16, byte_width: u16) -> Result<()>;
 
     /// Reads the audio sample from the WAVE data chunk.
-    fn read<R: io::Read>(reader: &mut R, SampleFormat, bytes: u16, bits: u16) -> Result<Self>;
+    fn read<R: io::Read>(reader: &mut R, format: SampleFormat, bytes: u16, bits: u16) -> Result<Self>;
 
     /// Cast the sample to a 16-bit sample.
     ///
@@ -358,6 +358,79 @@ pub struct WavSpec {
     pub sample_format: SampleFormat,
 }
 
+/// Ill-formed WAVE data was encountered.
+#[derive(Debug)]
+pub struct FormatError(pub &'static str);
+
+impl fmt::Display for FormatError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Ill-formed WAVE file: {}", self.0)
+    }
+}
+
+impl error::Error for FormatError{}
+
+/// The sample has more bits than the destination type.
+///
+/// When iterating using the `samples` iterator, this means that the
+/// destination type (produced by the iterator) is not wide enough to hold
+/// the sample. When writing, this means that the sample cannot be written,
+/// because it requires more bits than the bits per sample specified.
+#[derive(Debug)]
+pub struct TooWideError;
+
+impl fmt::Display for TooWideError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "The sample has more bits than the destination type")
+    }
+}
+
+impl error::Error for TooWideError {}
+
+/// The number of samples written is not a multiple of the number of channels.
+#[derive(Debug)]
+pub struct UnfinishedSampleError;
+
+impl fmt::Display for UnfinishedSampleError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "The number of samples written is not a multiple of the number of channels")
+    }
+}
+
+impl error::Error for UnfinishedSampleError {}
+
+/// The format is not supported.
+#[derive(Debug)]
+pub struct UnsupportedError;
+
+impl fmt::Display for UnsupportedError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "The wave format of the file is not supported")
+    }
+}
+
+impl error::Error for UnsupportedError {}
+
+/// The sample format is different than the destination format.
+///
+/// When iterating using the `samples` iterator, this means the destination
+/// type (produced by the iterator) has a different sample format than the
+/// samples in the wav file.
+///
+/// For example, this will occur if the user attempts to produce `i32`
+/// samples (which have a `SampleFormat::Int`) from a wav file that
+/// contains floating point data (`SampleFormat::Float`).
+#[derive(Debug)]
+pub struct InvalidSampleFormatError;
+
+impl fmt::Display for InvalidSampleFormatError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "The sample format differs from the destination format")
+    }
+}
+
+impl error::Error for InvalidSampleFormatError {}
+
 /// The error type for operations on `WavReader` and `WavWriter`.
 #[derive(Debug)]
 pub enum Error {
@@ -389,50 +462,40 @@ pub enum Error {
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
         match *self {
-            Error::IoError(ref err) => err.fmt(formatter),
-            Error::FormatError(reason) => {
-                formatter.write_str("Ill-formed WAVE file: ")?;
-                formatter.write_str(reason)
-            }
+            Error::IoError(ref err) => err.fmt(f),
+            Error::FormatError(reason) => write!(f, "Ill-formed WAVE file: {}", reason),
             Error::TooWide => {
-                formatter.write_str("The sample has more bits than the destination type.")
+                f.write_str("The sample has more bits than the destination type.")
             }
             Error::UnfinishedSample => {
-                formatter.write_str(
+                f.write_str(
                     "The number of samples written is not a multiple of the number of channels.")
             }
             Error::Unsupported => {
-                formatter.write_str("The wave format of the file is not supported.")
+                f.write_str("The wave format of the file is not supported.")
             }
             Error::InvalidSampleFormat => {
-                formatter.write_str("The sample format differs from the destination format.")
+                f.write_str("The sample format differs from the destination format.")
             }
         }
     }
 }
 
 impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::IoError(ref err) => err.description(),
-            Error::FormatError(reason) => reason,
-            Error::TooWide => "the sample has more bits than the destination type",
-            Error::UnfinishedSample => "the number of samples written is not a multiple of the number of channels",
-            Error::Unsupported => "the wave format of the file is not supported",
-            Error::InvalidSampleFormat => "the sample format differs from the destination format",
-        }
-    }
-
-    fn cause(&self) -> Option<&error::Error> {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
             Error::IoError(ref err) => Some(err),
             Error::FormatError(_) => None,
-            Error::TooWide => None,
-            Error::UnfinishedSample => None,
-            Error::Unsupported => None,
-            Error::InvalidSampleFormat => None,
+            Error::TooWide => Some(&TooWideError),
+            Error::UnfinishedSample => Some(&UnfinishedSampleError),
+            Error::Unsupported => Some(&UnsupportedError),
+            Error::InvalidSampleFormat => Some(&InvalidSampleFormatError),
+            //Error::TooWide => "the sample has more bits than the destination type",
+            //Error::UnfinishedSample => "the number of samples written is not a multiple of the number of channels",
+            //Error::Unsupported => "the wave format of the file is not supported",
+            //Error::InvalidSampleFormat => "the sample format differs from the destination format",
         }
     }
 }
@@ -440,6 +503,36 @@ impl error::Error for Error {
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Error {
         Error::IoError(err)
+    }
+}
+
+impl From<FormatError> for Error {
+    fn from(err: FormatError) -> Error {
+        Error::FormatError(err.0)
+    }
+}
+
+impl From<TooWideError> for Error {
+    fn from(_: TooWideError) -> Error {
+        Error::TooWide
+    }
+}
+
+impl From<UnfinishedSampleError> for Error {
+    fn from(_: UnfinishedSampleError) -> Error {
+        Error::UnfinishedSample
+    }
+}
+
+impl From<UnsupportedError> for Error {
+    fn from(_: UnsupportedError) -> Error {
+        Error::Unsupported
+    }
+}
+
+impl From<InvalidSampleFormatError> for Error {
+    fn from(_: InvalidSampleFormatError) -> Error {
+        Error::InvalidSampleFormat
     }
 }
 

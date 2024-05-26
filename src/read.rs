@@ -14,7 +14,6 @@ use std::cmp;
 use std::fs;
 use std::io;
 use std::marker;
-use std::mem;
 use std::path;
 use super::{Error, Result, Sample, SampleFormat, WavSpec};
 
