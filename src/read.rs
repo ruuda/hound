@@ -868,7 +868,7 @@ impl<R> WavReader<R>
 
     /// Grants mutable access to the underlying reader.
     pub fn inner(&mut self) -> &mut R {
-        self.reader.inner();
+        self.reader.inner()
     }
 
     /// Seek to the given time within the file.
