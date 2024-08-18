@@ -678,6 +678,11 @@ impl<R: io::Read> ChunksReader<R> {
         self.reader
     }
 
+    /// Lend out the raw reader
+    pub fn inner(&mut self) -> &mut R {
+        &mut self.reader
+    }
+
     /// Seek to the given time within the file.
     ///
     /// The given time is measured in number of samples (independent of the
@@ -859,6 +864,11 @@ impl<R> WavReader<R>
     /// Destroys the `WavReader` and returns the underlying reader.
     pub fn into_inner(self) -> R {
         self.reader.into_inner()
+    }
+
+    /// Grants mutable access to the underlying reader.
+    pub fn inner(&mut self) -> &mut R {
+        self.reader.inner();
     }
 
     /// Seek to the given time within the file.
