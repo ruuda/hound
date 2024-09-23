@@ -1,8 +1,8 @@
 [package]
-
 name = "hound"
 version = "3.4.0"
 authors = ["Ruud van Asseldonk <dev@veniogames.com>"]
+edition = "2018"
 rust-version = "1.40"
 description = "A wav encoding and decoding library"
 keywords = ["wav", "wave", "audio", "codec"]

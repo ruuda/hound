@@ -2,7 +2,6 @@
 
 // Usage: cargo run --example wavstdout | mpv -
 
-extern crate hound;
 use std::io::Write;
 
 fn main() {

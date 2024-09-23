@@ -17,8 +17,8 @@ use std::io::{Seek, Write};
 use std::mem::MaybeUninit;
 use std::path;
 use super::{Error, Result, Sample, SampleFormat, WavSpec};
-use ::read;
-use read::{WavSpecEx};
+use crate::read;
+use crate::read::{WavSpecEx};
 
 /// Extends the functionality of `io::Write` with additional methods.
 ///
@@ -981,7 +981,7 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
 
 #[test]
 fn short_write_should_signal_error() {
-    use SampleFormat;
+    use crate::SampleFormat;
 
     let mut buffer = io::Cursor::new(Vec::new());
 

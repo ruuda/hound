@@ -15,8 +15,6 @@
 // more elaborate version of the example found in the readme, mostly useful for
 // checking whether Hound can read a specific file.
 
-extern crate hound;
-
 use std::env;
 use std::io;
 

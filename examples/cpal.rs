@@ -12,9 +12,6 @@
 
 // This example shows how to play a wav file using the cpal crate.
 
-extern crate hound;
-extern crate cpal;
-
 use std::env;
 use std::thread;
 

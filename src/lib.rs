@@ -59,17 +59,17 @@ use std::error;
 use std::fmt;
 use std::io;
 use std::result;
-use read::ReadExt;
-use write::WriteExt;
+use crate::read::ReadExt;
+use crate::write::WriteExt;
 
 mod read;
 mod write;
 
-pub use read::{WavReader, WavIntoSamples, WavSamples, read_wave_header};
-pub use write::{SampleWriter16, WavWriter};
+pub use crate::read::{WavReader, WavIntoSamples, WavSamples, read_wave_header};
+pub use crate::write::{SampleWriter16, WavWriter};
 
-pub use read::{ Chunk, ChunksReader };
-pub use write::ChunksWriter;
+pub use crate::read::{ Chunk, ChunksReader };
+pub use crate::write::ChunksWriter;
 
 /// A type that can be used to represent audio samples.
 ///
@@ -496,7 +496,6 @@ impl WavSpec {
     /// Example:
     ///
     /// ```no_run
-    /// extern crate hound;
     /// use std::io::Write;
     ///
     /// let spec = hound::WavSpec {
@@ -952,7 +951,7 @@ fn read_non_standard_chunks() {
 #[test]
 fn write_read_chunks_is_lossless() {
     use std::io::{ Read, Write };
-    use read::WavSpecEx;
+    use crate::read::WavSpecEx;
 
     let write_spec = WavSpecEx {
         spec: WavSpec {
@@ -968,7 +967,7 @@ fn write_read_chunks_is_lossless() {
         let value = &b"12345"[..len];
         let mut buffer = io::Cursor::new(vec);
         {
-            let mut writer = ::write::ChunksWriter::new(&mut buffer).unwrap();
+            let mut writer = crate::write::ChunksWriter::new(&mut buffer).unwrap();
             writer.write_fmt(write_spec).unwrap();
             writer.start_chunk(*b"houn").unwrap().write_all(value).unwrap();
             writer.start_data_chunk().unwrap();

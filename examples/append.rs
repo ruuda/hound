@@ -17,8 +17,6 @@ use std::f32::consts::PI;
 use std::i16;
 use std::path::Path;
 
-extern crate hound;
-
 fn main() {
     let spec = hound::WavSpec {
         channels: 1,

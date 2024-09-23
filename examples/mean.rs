@@ -22,8 +22,6 @@
 // TODO: This example should probably be removed, it is just here for verifying
 // and assumption at this point.
 
-extern crate hound;
-
 use std::env;
 
 fn main() {
