@@ -166,8 +166,8 @@ pub struct EmbeddedWriter<'w, W: 'w + io::Write + io::Seek> {
 
 impl<'w, W: 'w + io::Write + io::Seek> EmbeddedWriter<'w, W> {
     /// This function should be called when the Chunk data has been written,
-    /// before disposing of the writter, in order to catch possible errors, as
-    /// the finalization actually needs to perfoms operations to the underlying
+    /// before disposing of the writer, in order to catch possible errors, as
+    /// the finalization actually needs to performs operations to the underlying
     /// writer.
     pub fn finalize(mut self) -> io::Result<()> {
         self.do_finalize()
@@ -937,7 +937,7 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
 
     unsafe fn write_u16_le_unchecked(&mut self, value: u16) {
         // On little endian machines the compiler produces assembly code
-        // that merges the following two lines into a single instruction. 
+        // that merges the following two lines into a single instruction.
 
         self.buffer.get_unchecked_mut(self.index as usize).write(value as u8);
         self.buffer.get_unchecked_mut(self.index as usize + 1).write((value >> 8) as u8);

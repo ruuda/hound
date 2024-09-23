@@ -208,7 +208,7 @@ impl Sample for i8 {
         match (bytes, bits) {
             (1, 8) => Ok(try!(reader.read_u8().map(signed_from_u8))),
             (n, _) if n > 1 => Err(Error::TooWide),
-            // TODO: add a genric decoder for any bit depth.
+            // TODO: add a generic decoder for any bit depth.
             _ => Err(Error::Unsupported),
         }
     }
@@ -365,7 +365,7 @@ pub struct WavSpec {
 /// The error type for operations on `WavReader` and `WavWriter`.
 #[derive(Debug)]
 pub enum Error {
-    /// An IO error occured in the underlying reader or writer.
+    /// An IO error occurred in the underlying reader or writer.
     IoError(io::Error),
     /// Ill-formed WAVE data was encountered.
     FormatError(&'static str),
