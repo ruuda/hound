@@ -128,14 +128,20 @@ impl<W> WriteExt for W
 /// extra channels are not assigned to any physical speaker location.  In this scenario, this
 /// function will return a filled channel mask.
 fn channel_mask(channels: u16) -> u32 {
+    // If the channel count is 1, then the mask will be 0x4, for use with mono audio with the FRONT_CENTER speaker
+    // see https://github.com/tpn/winsdk-10/blob/9b69fd26ac0c7d0b83d378dba01080e93349c2ed/Include/10.0.10240.0/shared/ksmedia.h#L1695C42-L1695C62
+    if channels == 1 {
+        return 0x4;
+    }
     // clamp to 0-18 to stay within reserved bits
     (0..channels.clamp(0, 18) as u32).map(|c| 1 << c).fold(0, |a, c| a | c)
+
 }
 
 #[test]
 fn verify_channel_mask() {
     assert_eq!(channel_mask(0), 0);
-    assert_eq!(channel_mask(1), 1);
+    assert_eq!(channel_mask(1), 4);
     assert_eq!(channel_mask(2), 3);
     assert_eq!(channel_mask(3), 7);
     assert_eq!(channel_mask(4), 0xF);
