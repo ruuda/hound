@@ -1026,3 +1026,80 @@ fmt \x28\x00\x00\x00\xfe\xff\x0a\x00\x80\x3e\x00\x00\x00\xe2\x04\x00\
 \x00\x00\x10\x00\x80\x00\x00\xaa\x00\x38\x9b\x71\
 data\xFF\xFF\xFF\xFF"[..]);
 }
+
+#[cfg(test)]
+#[test]
+fn test_ignore_length() {
+    macro_rules! test {
+        (no_ignore, $ty:ty, $buf:expr) => {{
+            let mut out_reader = WavReader::new(std::io::Cursor::new($buf)).unwrap();
+            let out_samples_res = out_reader
+                .samples()
+                .collect::<crate::Result<Vec<$ty>>>();
+            assert!{{
+                if let Err(crate::Error::IoError(e)) = out_samples_res {
+                    e.kind() == std::io::ErrorKind::UnexpectedEof
+                } else {
+                    false
+                }
+            }};
+        }};
+        (ignore, $buf:expr, $in_samples:expr) => {{
+            let mut out_reader = WavReader::new(std::io::Cursor::new($buf)).unwrap();
+            out_reader.set_ignore_length(true);
+            let out_samples = out_reader
+                .samples()
+                .collect::<crate::Result<Vec<_>>>()
+                .unwrap();
+            assert_eq!($in_samples, out_samples);
+        }};
+        ($ty:ty, $files:expr) => {
+            for fname in $files {
+                let mut reader = WavReader::open(fname).unwrap();
+                let spec = reader.spec();
+                let samples = reader
+                    .samples()
+                    .collect::<crate::Result<Vec<$ty>>>()
+                    .unwrap();
+                let mut buf = spec.into_header_for_infinite_file();
+                samples.iter().for_each(|sample| {
+                    sample.write(&mut buf, spec.bits_per_sample).unwrap();
+                });
+                // expect EOF errors
+                test!(no_ignore, $ty, buf.clone());
+                // expect success and getting back exactly the samples written
+                test!(ignore, buf, samples);
+            };
+        }
+    }
+    let files_s16 = &[
+        "testsamples/pcmwaveformat-16bit-44100Hz-mono.wav",
+        "testsamples/pcmwaveformat-16bit-44100Hz-mono-extra.wav",
+        "testsamples/waveformatex-16bit-44100Hz-mono.wav",
+        "testsamples/waveformatex-16bit-44100Hz-mono-extra.wav",
+        "testsamples/waveformatex-16bit-44100Hz-stereo.wav",
+    ];
+
+    test!{i16, files_s16};
+
+    let files_u8 = &[
+        "testsamples/pcmwaveformat-8bit-44100Hz-mono.wav",
+        "testsamples/waveformatex-8bit-11025Hz-mono.wav",
+    ];
+
+    test!{i16, files_u8};
+
+    let files_s24 = &[
+        "testsamples/pcmwaveformat-24bit-4byte-48kHz-stereo.wav",
+        "testsamples/waveformatextensible-24bit-192kHz-mono.wav",
+        "testsamples/waveformatextensible-24bit-4byte-48kHz-stereo.wav",
+    ];
+
+    test!{i32, files_s24};
+
+    let files_s32 = &[
+        "testsamples/waveformatextensible-32bit-48kHz-stereo.wav",
+    ];
+
+    test!{i32, files_s32};
+}
