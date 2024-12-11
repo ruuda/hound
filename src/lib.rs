@@ -28,6 +28,7 @@
 //!     sample_rate: 44100,
 //!     bits_per_sample: 16,
 //!     sample_format: hound::SampleFormat::Int,
+//!     channel_bitmask: None,
 //! };
 //! let mut writer = hound::WavWriter::create("sine.wav", spec).unwrap();
 //! for t in (0 .. 44100).map(|x| x as f32 / 44100.0) {
@@ -360,6 +361,9 @@ pub struct WavSpec {
 
     /// Whether the wav's samples are float or integer values.
     pub sample_format: SampleFormat,
+
+    /// The channel bitmask for this wav, if present.
+    pub channel_bitmask: Option<u32>
 }
 
 /// The error type for operations on `WavReader` and `WavWriter`.
@@ -504,6 +508,7 @@ impl WavSpec {
     ///     channels: 1,
     ///     sample_format: hound::SampleFormat::Int,
     ///     sample_rate: 16000,
+    ///     channel_bitmask: None,
     /// };
     /// 
     /// let v = spec.into_header_for_infinite_file();
@@ -553,6 +558,7 @@ fn write_read_i16_is_lossless() {
         sample_rate: 44100,
         bits_per_sample: 16,
         sample_format: SampleFormat::Int,
+        channel_bitmask: None,
     };
 
     {
@@ -582,6 +588,7 @@ fn write_read_i16_via_sample_writer_is_lossless() {
         sample_rate: 44100,
         bits_per_sample: 16,
         sample_format: SampleFormat::Int,
+        channel_bitmask: None,
     };
 
     {
@@ -625,6 +632,7 @@ fn write_read_i8_is_lossless() {
         sample_rate: 48000,
         bits_per_sample: 8,
         sample_format: SampleFormat::Int,
+        channel_bitmask: Some(65535u32),
     };
 
     // Write `i8` samples.
@@ -657,6 +665,7 @@ fn write_read_i24_is_lossless() {
         sample_rate: 96000,
         bits_per_sample: 24,
         sample_format: SampleFormat::Int,
+        channel_bitmask: Some(65535u32),
     };
 
     // Write `i32` samples, but with at most 24 bits per sample.
@@ -690,6 +699,7 @@ fn write_read_f32_is_lossless() {
         sample_rate: 44100,
         bits_per_sample: 32,
         sample_format: SampleFormat::Float,
+        channel_bitmask: Some(0b11),
     };
 
     {
@@ -722,6 +732,7 @@ fn no_32_bps_for_float_sample_format_panics() {
         sample_rate: 44100,
         bits_per_sample: 16, // will panic, because value must be 32 for floating point
         sample_format: SampleFormat::Float,
+        channel_bitmask: None,
     };
 
     WavWriter::new(&mut buffer, write_spec).unwrap();
@@ -741,6 +752,7 @@ fn flush_should_produce_valid_file() {
             sample_rate: 44100,
             bits_per_sample: 16,
             sample_format: SampleFormat::Int,
+            channel_bitmask: None,
         };
         let mut writer = WavWriter::new(&mut buffer, spec).unwrap();
 
@@ -781,6 +793,7 @@ fn new_append_should_append() {
         sample_rate: 44100,
         bits_per_sample: 16,
         sample_format: SampleFormat::Int,
+        channel_bitmask: None,
     };
 
     // Write initial file.
@@ -887,6 +900,7 @@ fn append_works_on_files() {
         sample_rate: 44100,
         bits_per_sample: 16,
         sample_format: SampleFormat::Int,
+        channel_bitmask: None,
     };
 
     let mut writer = WavWriter::create("append.wav", spec).unwrap();
@@ -960,6 +974,7 @@ fn write_read_chunks_is_lossless() {
             sample_rate: 44100,
             bits_per_sample: 16,
             sample_format: SampleFormat::Int,
+            channel_bitmask: None,
         },
         bytes_per_sample: 2,
     };
@@ -1007,6 +1022,7 @@ fn test_into_header_for_infinite_file() {
         channels: 1,
         sample_format: SampleFormat::Int,
         sample_rate: 16000,
+        channel_bitmask: None,
     };
     let v = spec.into_header_for_infinite_file();
     assert_eq!(&v[..], &b"RIFF\xFF\xFF\xFF\xFFWAVE\
@@ -1018,6 +1034,7 @@ data\xFF\xFF\xFF\xFF"[..]);
         channels: 10,
         sample_format: SampleFormat::Int,
         sample_rate: 16000,
+        channel_bitmask: None,
     };
     let v = spec.into_header_for_infinite_file();
     assert_eq!(&v[..], &b"RIFF\xFF\xFF\xFF\xFFWAVE\

@@ -25,6 +25,7 @@ fn main() {
         sample_rate: 44100,
         bits_per_sample: 16,
         sample_format: hound::SampleFormat::Int,
+        channel_bitmask: None,
     };
 
     let path: &Path = "sine.wav".as_ref();

@@ -518,6 +518,7 @@ impl<R: io::Read> ChunksReader<R> {
             sample_rate: n_samples_per_sec,
             bits_per_sample: bits_per_sample,
             sample_format: SampleFormat::Int,
+            channel_bitmask: None,
         };
 
         // The different format tag definitions can be found in mmreg.h that is
@@ -647,7 +648,7 @@ impl<R: io::Read> ChunksReader<R> {
         // } WAVEFORMATEXTENSIBLE, *PWAVEFORMATEXTENSIBLE;
         // ```
         let valid_bits_per_sample = try!(self.reader.read_le_u16());
-        let _channel_mask = try!(self.reader.read_le_u32()); // Not used for now.
+        spec.channel_bitmask = Some(try!(self.reader.read_le_u32())); // Not used for now.
         let mut subformat = [0u8; 16];
         try!(self.reader.read_into(&mut subformat));
 
