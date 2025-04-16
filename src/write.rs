@@ -990,6 +990,7 @@ fn short_write_should_signal_error() {
         sample_rate: 48000,
         bits_per_sample: 8,
         sample_format: SampleFormat::Int,
+        channel_bitmask: None,
     };
 
     // Deliberately write one sample less than 17 * 5.
@@ -1014,6 +1015,7 @@ fn wide_write_should_signal_error() {
         sample_rate: 44100,
         bits_per_sample: 8,
         sample_format: SampleFormat::Int,
+        channel_bitmask: None,
     };
     {
         let mut writer = WavWriter::new(&mut buffer, spec8).unwrap();
@@ -1024,7 +1026,8 @@ fn wide_write_should_signal_error() {
         assert!(writer.write_sample(128_i32).is_err());
     }
 
-    let spec16 = WavSpec { bits_per_sample: 16, ..spec8 };
+    let wav_spec = WavSpec { bits_per_sample: 16, ..spec8 };
+    let spec16 = wav_spec;
     {
         let mut writer = WavWriter::new(&mut buffer, spec16).unwrap();
         assert!(writer.write_sample(32767_i16).is_ok());
@@ -1052,6 +1055,7 @@ fn s24_wav_write() {
             sample_rate: 48000,
             bits_per_sample: 24,
             sample_format: SampleFormat::Int,
+            channel_bitmask: None,
         },
         bytes_per_sample: 4,
     };

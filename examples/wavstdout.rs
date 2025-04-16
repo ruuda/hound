@@ -11,6 +11,7 @@ fn main() {
         channels: 1,
         sample_format: hound::SampleFormat::Int,
         sample_rate: 16000,
+        channel_bitmask: None,
     };
 
     let v = spec.into_header_for_infinite_file();
