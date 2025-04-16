@@ -83,7 +83,7 @@ impl<R> ReadExt for R
             if progress > 0 {
                 n += progress;
             } else {
-                return Err(io::Error::new(io::ErrorKind::Other, "Failed to read enough bytes."));
+                return Err(io::ErrorKind::UnexpectedEof)?;
             }
         }
         Ok(())
@@ -285,6 +285,8 @@ pub enum Chunk<'r, R: 'r + io::Read> {
 pub struct ChunksReader<R: io::Read> {
     /// the underlying reader
     reader: R,
+    /// Don't err if EOF is reached before length
+    ignore_length: bool,
     /// the Wave format specification, if it has been read already
     pub spec_ex: Option<WavSpecEx>,
     /// when inside the main data state, keeps track of decoding and chunk
@@ -311,6 +313,7 @@ impl<R: io::Read> ChunksReader<R> {
         try!(read_wave_header(&mut reader));
         Ok(ChunksReader {
             reader: reader,
+            ignore_length: false,
             spec_ex: None,
             data_state: None,
         })
@@ -801,6 +804,21 @@ impl<R> WavReader<R>
         })
     }
 
+    /// Set whether to ignore header length.
+    ///
+    /// Length can be set to a maximum value that represents infinite length in
+    /// non-seekable sinks (like stdout).
+    ///
+    /// Setting this to `true` allows ignoring that length.
+    pub fn set_ignore_length(&mut self, ignore_length: bool) {
+        self.reader.ignore_length = ignore_length;
+    }
+
+    /// Get whether header length is ignored or not.
+    pub fn ignore_length(&self) -> bool {
+        self.reader.ignore_length
+    }
+
     /// Returns information about the WAVE file.
     pub fn spec(&self) -> WavSpec {
         self.reader.spec_ex
@@ -900,7 +918,10 @@ fn iter_next<R, S>(reader: &mut ChunksReader<R>) -> Option<Result<S>>
                                   data.spec_ex.spec.sample_format,
                                   data.spec_ex.bytes_per_sample,
                                   data.spec_ex.spec.bits_per_sample);
-        Some(sample.map_err(Error::from))
+        match sample {
+            Err(Error::IoError(e)) if e.kind() == io::ErrorKind::UnexpectedEof && reader.ignore_length => None,
+            _ => Some(sample.map_err(Error::from)),
+        }
     } else {
         None
     }
