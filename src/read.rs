@@ -719,6 +719,20 @@ pub struct WavSpecEx {
     pub bytes_per_sample: u16,
 }
 
+impl WavSpecEx {
+    /// Sets the normal information about the audio data.
+    pub fn spec(mut self, spec: WavSpec) -> Self {
+        self.spec = spec;
+        self
+    }
+
+    /// Sets the number of bytes used to store a sample.
+    pub fn bytes_per_sample(mut self, bytes_per_sample: u16) -> Self {
+        self.bytes_per_sample = bytes_per_sample;
+        self
+    }
+}
+
 /// A reader that reads the WAVE format from the underlying reader.
 ///
 /// A `WavReader` is a streaming reader. It reads data from the underlying

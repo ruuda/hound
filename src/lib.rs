@@ -543,6 +543,30 @@ impl WavSpec {
 
         v
     }
+     
+    /// Sets the number of channels.
+    pub fn channels(mut self, channels: u16) -> Self {
+        self.channels = channels;
+        self
+    }
+
+    /// Sets the number of samples per second.
+    pub fn sample_rate(mut self, sample_rate: u32) -> Self {
+        self.sample_rate = sample_rate;
+        self
+    }
+
+    /// Sets the number of bits per sample.
+    pub fn bits_per_sample(mut self, bits_per_sample: u16) -> Self {
+        self.bits_per_sample = bits_per_sample;
+        self
+    }
+
+    /// Sets whether the wav's samples are float or integer values.
+    pub fn sample_format(mut self, sample_format: SampleFormat) -> Self {
+        self.sample_format = sample_format;
+        self
+    }
 }
 
 #[test]
