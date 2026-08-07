@@ -461,7 +461,8 @@ impl<W> WavWriter<W>
             panic!("When calling get_i16_writer, the number of bits per sample must be 16.");
         }
 
-        let num_bytes = num_samples as usize * 2;
+        let num_bytes = (num_samples as usize).checked_mul(2)
+            .expect("When calling get_i16_writer, num_samples × 2 must not overflow a usize.");
 
         if self.sample_writer_buffer.len() < num_bytes {
             // We need a bigger buffer. There is no point in growing the old
