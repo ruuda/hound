@@ -760,6 +760,9 @@ pub struct SampleWriter16<'parent, W> where W: io::Write + io::Seek + 'parent {
     data_bytes_written: &'parent mut u32,
 
     /// The index into the buffer where the next bytes will be written.
+    ///
+    /// Invariant: The index is always a multiple of two, because we write
+    /// 2-byte i16 samples.
     index: u32,
 }
 
@@ -779,8 +782,18 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
     /// Note that nothing is actually written until `flush()` is called.
     #[inline(always)]
     pub fn write_sample<S: Sample>(&mut self, sample: S) {
-        assert!((self.index as usize) + 2 <= self.buffer.len(),
-          "Trying to write more samples than reserved for the sample writer.");
+        debug_assert_eq!(self.index & 1, 0, "Index is even.");
+        debug_assert_eq!(self.buffer.len() & 1, 0, "The buffer length is even.");
+
+        // Check that there is space for one more sample, without overflowing
+        // the index when usize is 32-bit.
+        let is_ok = (self.index as usize)
+            .checked_add(2)
+            .map(|x| x <= self.buffer.len());
+        assert_eq!(
+            is_ok, Some(true),
+            "Trying to write more samples than reserved for the sample writer.",
+        );
 
         // SAFETY: We performed the bounds check in the above assertion.
         unsafe { self.write_sample_unchecked(sample) };
