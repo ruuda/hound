@@ -425,6 +425,15 @@ impl<W> WavWriter<W>
     /// WAVE interleaves channel data, so the channel that this writes the
     /// sample to depends on previous writes. This will return an error if the
     /// sample does not fit in the number of bits specified in the `WavSpec`.
+    ///
+    /// The WAVE format has 32-bit length headers that mean it can hold at most
+    /// 4 GiB of audio data. This function does not fail when you write more
+    /// than that, in order to support streaming cases where the header is
+    /// ignored, and the 4 GiB limit does not apply. After 4 GiB, the size
+    /// fields saturate, and the resulting file will contain more samples than
+    /// its headers indicate. The `duration` and `len` methods report consistent
+    /// with the size headers, so their return values stop being meaningful
+    /// after 4 GiB of data.
     #[inline]
     pub fn write_sample<S: Sample>(&mut self, sample: S) -> Result<()> {
         try!(sample.write_padded(
@@ -432,7 +441,14 @@ impl<W> WavWriter<W>
             self.spec.bits_per_sample,
             self.bytes_per_sample,
         ));
-        self.data_bytes_written += self.bytes_per_sample as u32;
+        // The saturating add makes `data_bytes_written` a lie when you overflow
+        // the 4 GiB, but it's better than the silent wrapping that happened
+        // previously. We also cannot return an error, because some users depend
+        // on being able to write an "infinite" stream to a pipe, where the
+        // header is never updated and the size limit is not a problem. I think
+        // at this point the entire crate needs to be rewritten with better
+        // APIs, but that's for another time.
+        self.data_bytes_written = self.data_bytes_written.saturating_add(self.bytes_per_sample as u32);
         Ok(())
     }
 

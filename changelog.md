@@ -47,6 +47,12 @@ Changes:
    considers the data chunk size when determining the number of samples in the
    file.
 
+ * Saturate the internal 32-bit `data_bytes_written` counter, rather than
+   overflowing it, and document the size limitations on `write_sample`. Writing
+   more than 4 GiB worth of samples is something that the WAVE format cannot
+   represent. Previously the headers held wrapped lengths, now they hold
+   saturated lengths.
+
 [101]: https://github.com/ruuda/hound/pull/101
 
 3.5.1
