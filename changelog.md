@@ -1,6 +1,54 @@
 Changelog
 =========
 
+3.5.2
+-----
+
+Unreleased.
+
+Changes:
+
+ * Disallow constructing a `SampleWriter16` when that would result in a data
+   chunk larger than 4 GiB, which the wav format cannot represent. Previously,
+   a `SampleWriter16` could be misused:
+
+   - Constructing multiple such writers, but with fewer than 2<sup>31</sup>
+     samples at a time, would overflow the wav format's 32-bit length fields
+     at `flush()` time, and result in a file where the size of the data section
+     does not match the size specified in its header. Now instead the program
+     panics when constructing a sample writer that would write past 4 GiB.
+   - Constructing a writer for 2<sup>31</sup> or more samples, on a platform
+     where `usize` is 64 bits, would result in an overflow of the internal
+     counter that counts how many bytes are written, which would in turn cause
+     a panic on `flush()`. Now this panic happens already at sample writer
+     construction time. Furthermore, when `write_sample` was called more than
+     the reserved number of samples, this could result in an out of bounds
+     write past the internal buffer. This is no longer possible because writers
+     for that many samples can no longer be constructed.
+   - Constructing a writer for 2<sup>31</sup> or more samples, on a platform
+     where `usize` is 32 bits, would result in an incorrectly sized internal
+     buffer. A call to the unsafe method `write_sample_unchecked` could write
+     past the bounds of that buffer without violating the method's documented
+     safety contract. Furthermore, the safe method `write_sample` could also
+     write two bytes past the bounds of the internal buffer when `num_samples`
+     was exactly 2<sup>32</sup> – 1. Programs that hit neither of those cases
+     would have paniced in `write_sample` when they tried to write more samples
+     than the (incorrectly sized) internal buffer could hold. Now none of these
+     cases are reachable, and writing 2<sup>32</sup> – 1 samples is supported.
+
+   This resolves [#101][101], thanks to Manish Goregaokar for reporting the
+   out-of-bounds soundness issue.
+
+ * Saturate the 32-bit file size header rather than overflowing it. A wav file
+   with a data section of 4 GiB in size (or slightly below that), can exceed a
+   4 GiB file size due to the size of the headers. Previously this would have
+   written a very small file size to the header, now we write `u32::MAX`. The
+   file size header is not needed to read the wav format; Hound itself only
+   considers the data chunk size when determining the number of samples in the
+   file.
+
+[101]: https://github.com/ruuda/hound/pull/101
+
 3.5.1
 -----
 
