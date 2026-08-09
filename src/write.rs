@@ -447,13 +447,16 @@ impl<W> WavWriter<W>
     ///
     /// # Panics
     ///
-    /// Panics if the spec does not match a 16 bits per sample integer format.
-    ///
-    /// Attempting to write more than `num_samples` samples to the writer will
-    /// panic too.
+    /// * Panics if the spec does not match a 16 bits per sample integer format.
+    /// * Attempting to write more than `num_samples` samples to the writer
+    ///   panics.
+    /// * Panics when `num_samples` would bring the total above 2<sup>31</sup>,
+    ///   which is the maximum that the wav format can represent.
     pub fn get_i16_writer<'s>(&'s mut self,
                               num_samples: u32)
                               -> SampleWriter16<'s, W> {
+        use std::u32;
+
         if self.spec.sample_format != SampleFormat::Int {
             panic!("When calling get_i16_writer, the sample format must be int.");
         }
@@ -461,8 +464,13 @@ impl<W> WavWriter<W>
             panic!("When calling get_i16_writer, the number of bits per sample must be 16.");
         }
 
-        let num_bytes = (num_samples as usize).checked_mul(2)
-            .expect("When calling get_i16_writer, num_samples × 2 must not overflow a usize.");
+        let max_samples_left = (u32::MAX - self.data_bytes_written) / 2;
+        if num_samples > max_samples_left {
+            panic!("Not enough space in data section, can have at most 2^31 i16 samples.");
+        }
+        // Does not overflow because we checked above that there is enough space
+        // to fit all the requested samples in a size that u32 can represent.
+        let num_bytes = num_samples as usize * 2;
 
         if self.sample_writer_buffer.len() < num_bytes {
             // We need a bigger buffer. There is no point in growing the old
@@ -489,8 +497,15 @@ impl<W> WavWriter<W>
     fn update_header(&mut self) -> Result<()> {
         // The header size minus magic and 32-bit filesize (8 bytes).
         // The data chunk length (4 bytes) is the last part of the header.
+        // We use a saturating add for the file size; if the length of the data
+        // section is 4 GiB already, then the file plus header would be larger
+        // than what the format supports. Better than silently writing a header
+        // that is too small would be to return an error, but adding a variant
+        // would be a breaking change which is not worth it at this point. A
+        // reader which reads only the chunk headers can still read the entire
+        // file.
         let header_size = self.data_len_offset + 4 - 8;
-        let file_size = self.data_bytes_written + header_size;
+        let file_size = self.data_bytes_written.saturating_add(header_size);
 
         try!(self.writer.seek(io::SeekFrom::Start(4)));
         try!(self.writer.write_le_u32(file_size));
@@ -813,7 +828,10 @@ impl<'parent, W: io::Write + io::Seek> SampleWriter16<'parent, W> {
 
         try!(self.writer.write_all(slice));
 
+        // The narrowing to u32 and the add do not fail, because at construction
+        // time we limit the buffer size.
         *self.data_bytes_written += self.buffer.len() as u32;
+
         Ok(())
     }
 }
